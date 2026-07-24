@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import time # Simula il ritardo del database reale
 
 # Configurazione della pagina
 st.set_page_config(page_title="Energy Trading Dashboard", layout="wide")
@@ -14,13 +13,16 @@ tab_simulatore, tab_reale = st.tabs(["🎛️ Simulatore Strategico", "🌍 Dati
 # FINESTRA 1: SIMULATORE
 # ==========================================
 with tab_simulatore:
-    # Nota professionale
-    st.info("📌 **Nota Operativa:** Il margine calcolato (Spread) rappresenta esclusivamente il margine di contribuzione operativo lordo. Tale valore **non** include i costi fissi aziendali quali: manutenzione ordinaria e straordinaria dell'impianto, stipendi dei tecnici e del personale, ammortamenti dei macchinari e rate dei prestiti bancari.")
+    # Nota professionale (Costi Fissi vs Variabili)
+    st.info("📌 **Nota Operativa:** Il margine calcolato (Spread) rappresenta esclusivamente il margine di contribuzione operativo lordo. Tale valore **non** include i costi fissi aziendali quali:\n"
+            "* Manutenzione ordinaria e straordinaria dell'impianto.\n"
+            "* Stipendi dei tecnici e del personale.\n"
+            "* Ammortamenti dei macchinari e rate dei prestiti bancari.")
 
     # Finestra di selezione centrale
     tipo_centrale = st.selectbox(
         "Seleziona la tipologia di centrale:", 
-        ["Gas Naturale (CSS)", "Carbone (CDS)", "Idroelettrica", "Solare Fotovoltaico"]
+        ["Gas Naturale (CSS)", "Carbone (CDS)", "Idroelettrica (Biasca)", "Solare Fotovoltaico (Muttsee)"]
     )
 
     st.sidebar.header("Parametri di Mercato")
@@ -53,7 +55,7 @@ with tab_simulatore:
         p_carbone = st.sidebar.slider("Prezzo Carbone (€/MWh termico)", 0.0, 100.0, 20.0)
         p_co2 = st.sidebar.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
         efficienza = st.sidebar.slider("Efficienza Centrale (η)", 0.30, 0.50, 0.40)
-        ef = 0.34 # Il carbone emette più CO2 del gas
+        ef = 0.34
         
         costo_carb = p_carbone / efficienza
         costo_co2 = (p_co2 * ef) / efficienza
@@ -67,17 +69,29 @@ with tab_simulatore:
         prezzi_range = np.linspace(50, 250, 50)
         margine_range = prezzi_range - costo_carb - costo_co2
 
-    elif tipo_centrale in ["Idroelettrica", "Solare Fotovoltaico"]:
-        st.sidebar.markdown(f"Le centrali di tipo {tipo_centrale} non sostengono costi per il combustibile o per i permessi di emissione CO2. I costi variabili sono marginali.")
-        margine = p_elec
-        titolo_margine = "Margine Operativo (Rinnovabili)"
+    elif tipo_centrale == "Idroelettrica (Biasca)":
+        costo_om = st.sidebar.slider("Costi O&M Variabili (€/MWh)", 0.0, 20.0, 5.0)
+        margine = p_elec - costo_om
+        titolo_margine = "Margine Operativo Idroelettrico"
 
         st.subheader("Modello Matematico")
         st.latex(r"Margine = P_{elec} - O\&M_{var}")
-        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $O\&M_{var}$ = Costi variabili di esercizio (Assunti $\\approx 0$)")
+        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $O\&M_{var}$ = Costi operativi e di manutenzione variabili legati all'usura (es. turbine Pelton)")
         
         prezzi_range = np.linspace(50, 250, 50)
-        margine_range = prezzi_range # Correlazione diretta 1:1
+        margine_range = prezzi_range - costo_om
+
+    elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
+        st.sidebar.markdown("Le centrali solari non sostengono costi per il combustibile o permessi CO2. I costi variabili sono assunti pari a zero.")
+        margine = p_elec
+        titolo_margine = "Margine Lordo Fotovoltaico"
+
+        st.subheader("Modello Matematico")
+        st.latex(r"Margine = P_{elec}")
+        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità (Correlazione 1:1)")
+        
+        prezzi_range = np.linspace(50, 250, 50)
+        margine_range = prezzi_range 
 
     # Riduzione grafica (1/3 di larghezza)
     col_vuota_1, col_grafico, col_vuota_2 = st.columns([1, 1, 1]) 
@@ -92,75 +106,88 @@ with tab_simulatore:
     
     if margine > 0:
         st.success("Stato: IN THE MONEY (Profitto)")
-        st.markdown("""
-        **Azioni Consigliate:**
-        * **Impianto Fisico:** **ACCENDI** la centrale (dispatching).
-        * **Mercati (se in ottica Future/Hedging):**
-          * **VENDI** contratti future per l'energia elettrica (per bloccare il ricavo alto).
-        """ + ("" if tipo_centrale in ["Idroelettrica", "Solare Fotovoltaico"] else """
-          * **COMPRA** contratti future per il gas naturale/carbone (per bloccare il costo del combustibile).
-          * **COMPRA** certificati di CO2 (per coprire le emissioni).
-        """))
+        st.markdown("**Azioni Consigliate:**")
+        st.markdown("* **Impianto Fisico:** **ACCENDI** la centrale (dispatching).")
+        st.markdown("* **Mercati Future/Hedging (se applicabile):**")
+        st.markdown("  * **VENDI** contratti future per l'energia elettrica (blocchi il ricavo).")
+        if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
+            st.markdown(f"  * **COMPRA** contratti future per il {'gas naturale' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'} (blocchi il costo del combustibile).")
+            st.markdown("  * **COMPRA** certificati di CO2 (copri le emissioni).")
     else:
         st.error("Stato: OUT OF THE MONEY (Perdita)")
-        st.markdown("""
-        **Azioni Consigliate:**
-        * **Impianto Fisico:** **SPEGNI** la centrale (conviene acquistare energia sul mercato piuttosto che produrla).
-        * **Mercati (se in ottica Future/Hedging):**
-          * **COMPRA** contratti future per l'energia elettrica per soddisfare i tuoi clienti.
-        """ + ("" if tipo_centrale in ["Idroelettrica", "Solare Fotovoltaico"] else """
-          * **VENDI** contratti future per il gas/carbone (liquida le posizioni se non brucerai combustibile).
-          * **VENDI** certificati di CO2.
-        """))
+        st.markdown("**Azioni Consigliate:**")
+        st.markdown("* **Impianto Fisico:** **SPEGNI** la centrale (conviene acquistare energia sul mercato piuttosto che produrla in perdita).")
+        st.markdown("* **Mercati Future/Hedging (se applicabile):**")
+        st.markdown("  * **COMPRA** contratti future per l'energia elettrica per soddisfare i tuoi clienti.")
+        if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
+            st.markdown(f"  * **VENDI** contratti future per il {'gas' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'} (liquida le posizioni se non brucerai combustibile).")
+            st.markdown("  * **VENDI** certificati di CO2.")
 
 # ==========================================
-# FINESTRA 2: DATI REALI IMPIANTI SVIZZERI
+# FINESTRA 2: DATI REALI IMPIANTI SVIZZERI (API ENTSO-E)
 # ==========================================
 with tab_reale:
-    st.header("Monitoraggio Impianti Svizzeri (Dati Proxy Reali)")
-    st.markdown("Questa dashboard interroga i prezzi Spot dell'elettricità (Mercato Svizzero - Swissix) ed elabora le metriche finanziarie per tre asset strategici specifici.")
+    st.header("Monitoraggio Impianti Svizzeri (Dati Reali ENTSO-E)")
+    st.markdown("Questa dashboard interroga l'API ufficiale ENTSO-E per il mercato Day-Ahead Svizzero (Swissix) in tempo reale.")
     
-    if st.button("🔄 Aggiorna Dati da API ENTSO-E (Simulazione)"):
-        with st.spinner("Connessione al database in corso... fetch prezzi Spot Svizzera..."):
-            time.sleep(1.5) # Simula l'attesa di una vera API
-            
-            # Qui andrebbe inserita la libreria 'requests' per chiamare ENTSO-E. 
-            # Generiamo prezzi plausibili proxy per il mercato attuale:
-            prezzo_spot_ch = np.random.uniform(60.0, 110.0)
-            prezzo_gas_eu = np.random.uniform(30.0, 45.0)
-            prezzo_co2_eu = np.random.uniform(60.0, 75.0)
-            
-            # 1. Termovalorizzatore IRCD Giubiasco (Ciclo Termico)
-            # Nota: I termovalorizzatori percepiscono anche la "gate fee" per i rifiuti, ma qui analizziamo il lato power.
-            eff_ircd = 0.25 # Efficienza elettrica tipica termovalorizzatori
-            margine_ircd = prezzo_spot_ch - (prezzo_gas_eu / eff_ircd) - (prezzo_co2_eu * 0.2 / eff_ircd) # Usando proxy gas
-            
-            # 2. Idroelettrica: Centrale di Biasca
-            # Costi O&M stimati a ~5 CHF/MWh per usura Pelton.
-            margine_biasca = prezzo_spot_ch - 5.0
-            
-            # 3. Solare: Diga del Muttsee (AlpinSolar)
-            # Essendo a 2500m, produce molto in inverno con costi variabili quasi nulli.
-            margine_muttsee = prezzo_spot_ch
-            
-            col1, col2, col3 = st.columns(3)
-            
-            col1.metric(
-                label="🏭 IRCD Giubiasco (Termovalorizzatore)", 
-                value=f"€ {margine_ircd:.2f} / MWh", 
-                delta="Proxy Margin (Power)", delta_color="off"
-            )
-            col2.metric(
-                label="💧 Centrale di Biasca (Idro)", 
-                value=f"€ {margine_biasca:.2f} / MWh", 
-                delta="Margine Netto O&M", delta_color="normal"
-            )
-            col3.metric(
-                label="☀️ Diga del Muttsee (Fotovoltaico)", 
-                value=f"€ {margine_muttsee:.2f} / MWh", 
-                delta="Margine Lordo", delta_color="normal"
-            )
-            
-            st.caption(f"Dati di mercato di riferimento utilizzati: Spot CH €{prezzo_spot_ch:.2f} | Gas proxy €{prezzo_gas_eu:.2f} | CO2 €{prezzo_co2_eu:.2f}")
-    else:
-        st.info("Clicca il pulsante in alto per scaricare i dati di mercato aggiornati.")
+    if st.button("🔄 Scarica Prezzi Reali Mercato CH"):
+        try:
+            with st.spinner("Connessione a ENTSO-E Transparency Platform in corso..."):
+                from entsoe import EntsoePandasClient
+                
+                # CHIAVE API INSERITA QUI
+                api_key = "69b86d28-17c2-4e13-a587-1598048a6675"
+                client = EntsoePandasClient(api_key=api_key)
+                
+                # Imposta l'intervallo temporale (ultime 24 ore)
+                inizio = pd.Timestamp.now(tz='Europe/Zurich').floor('H') - pd.Timedelta(hours=24)
+                fine = pd.Timestamp.now(tz='Europe/Zurich').floor('H')
+                
+                # Interroga i prezzi Day-Ahead per la Svizzera ('CH')
+                prezzi_ch = client.query_day_ahead_prices('CH', start=inizio, end=fine)
+                
+                # Estrae l'ultimo prezzo disponibile
+                prezzo_spot_ch = prezzi_ch.iloc[-1]
+                
+                # Mostra un grafico dell'andamento reale
+                st.subheader("Andamento Prezzo Spot Svizzera (Ultime 24h)")
+                st.line_chart(prezzi_ch, height=200)
+                
+                # --- CALCOLO DEI MARGINI ---
+                prezzo_gas_eu = 38.5  # Proxy realistico attuale €/MWh
+                prezzo_co2_eu = 68.0  # Proxy realistico attuale €/tCO2
+                
+                # 1. Termovalorizzatore IRCD Giubiasco 
+                eff_ircd = 0.25 
+                margine_ircd = prezzo_spot_ch - (prezzo_gas_eu / eff_ircd) - (prezzo_co2_eu * 0.2 / eff_ircd) 
+                
+                # 2. Idroelettrica: Centrale di Biasca
+                margine_biasca = prezzo_spot_ch - 5.0 # Costo O&M stimato
+                
+                # 3. Solare: Diga del Muttsee 
+                margine_muttsee = prezzo_spot_ch
+                
+                st.markdown("---")
+                st.subheader("Margini Operativi Istantanei (su Prezzo Reale)")
+                col1, col2, col3 = st.columns(3)
+                
+                col1.metric(
+                    label="🏭 IRCD Giubiasco (Termovalorizzatore)", 
+                    value=f"€ {margine_ircd:.2f} / MWh", 
+                    delta="Proxy Margin (Power)", delta_color="off"
+                )
+                col2.metric(
+                    label="💧 Centrale di Biasca (Idro)", 
+                    value=f"€ {margine_biasca:.2f} / MWh", 
+                    delta="Margine Netto O&M", delta_color="normal"
+                )
+                col3.metric(
+                    label="☀️ Diga del Muttsee (Fotovoltaico)", 
+                    value=f"€ {margine_muttsee:.2f} / MWh", 
+                    delta="Margine Lordo", delta_color="normal"
+                )
+                
+                st.caption(f"Ultimo prezzo Spot CH rilevato da ENTSO-E: **€ {prezzo_spot_ch:.2f} / MWh** | Proxy Gas: €{prezzo_gas_eu} | Proxy CO2: €{prezzo_co2_eu}")
+
+        except Exception as e:
+            st.error(f"Si è verificato un errore durante il recupero dei dati da ENTSO-E: {e}")
