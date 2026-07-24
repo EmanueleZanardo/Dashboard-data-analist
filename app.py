@@ -140,8 +140,8 @@ with tab_reale:
                 client = EntsoePandasClient(api_key=api_key)
                 
                 # Imposta l'intervallo temporale (ultime 24 ore)
-                inizio = pd.Timestamp.now(tz='Europe/Zurich').floor('H') - pd.Timedelta(hours=24)
-                fine = pd.Timestamp.now(tz='Europe/Zurich').floor('H')
+                inizio = pd.Timestamp.now(tz='Europe/Zurich').floor('h') - pd.Timedelta(hours=24)
+                fine = pd.Timestamp.now(tz='Europe/Zurich').floor('h')
                 
                 # Interroga i prezzi Day-Ahead per la Svizzera ('CH')
                 prezzi_ch = client.query_day_ahead_prices('CH', start=inizio, end=fine)
