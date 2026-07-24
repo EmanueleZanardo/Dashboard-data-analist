@@ -4,8 +4,6 @@ import numpy as np
 import datetime
 
 # --- FUNZIONE DI DOWNLOAD CON CACHE ---
-# Salva i dati in memoria. La rotellina di caricamento (spinner) interna è disattivata
-# perché ne useremo una personalizzata nell'interfaccia principale.
 @st.cache_data(ttl=3600, show_spinner=False)
 def scarica_dati_entsoe(api_key, start_date, end_date):
     from entsoe import EntsoePandasClient
@@ -37,104 +35,118 @@ with tab_simulatore:
             "* Stipendi dei tecnici e del personale.\n"
             "* Ammortamenti dei macchinari e rate dei prestiti bancari.")
 
-    tipo_centrale = st.selectbox(
-        "Seleziona la tipologia di centrale:", 
-        ["Gas Naturale (CSS)", "Carbone (CDS)", "Idroelettrica (Biasca)", "Solare Fotovoltaico (Muttsee)"]
-    )
+    # Creiamo un layout a colonne: 1/3 per i parametri, 2/3 per i risultati
+    col_parametri, col_risultati = st.columns([1, 2.5])
 
-    st.sidebar.header("Parametri di Mercato")
-    p_elec = st.sidebar.slider("Prezzo Energia Elettrica (€/MWh)", 0.0, 300.0, 100.0)
-
-    margine = 0
-    titolo_margine = ""
-
-    if tipo_centrale == "Gas Naturale (CSS)":
-        p_gas = st.sidebar.slider("Prezzo Gas Naturale (€/MWh)", 0.0, 150.0, 40.0)
-        p_co2 = st.sidebar.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
-        efficienza = st.sidebar.slider("Efficienza Centrale (η)", 0.30, 0.65, 0.50)
-        ef = 0.2
+    # --- COLONNA SINISTRA: INPUT PARAMETRI ---
+    with col_parametri:
+        st.subheader("⚙️ Parametri di Mercato")
         
-        costo_gas = p_gas / efficienza
-        costo_co2 = (p_co2 * ef) / efficienza
-        margine = p_elec - costo_gas - costo_co2
-        titolo_margine = "Clean Spark Spread (CSS)"
+        tipo_centrale = st.selectbox(
+            "Seleziona la tipologia di centrale:", 
+            ["Gas Naturale (CSS)", "Carbone (CDS)", "Idroelettrica (Biasca)", "Solare Fotovoltaico (Muttsee)"]
+        )
 
-        st.subheader("Modello Matematico")
-        st.latex(r"CSS = P_{elec} - \frac{P_{gas}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
-        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $P_{gas}$ = Prezzo Gas | $P_{CO_2}$ = Prezzo CO2 | $\eta$ = Efficienza termica | $E_f$ = Fattore emissione gas (0.2)")
+        p_elec = st.slider("Prezzo Energia Elettrica (€/MWh)", 0.0, 300.0, 100.0)
+
+        # Slider dinamici generati in base alla centrale scelta
+        if tipo_centrale == "Gas Naturale (CSS)":
+            p_gas = st.slider("Prezzo Gas Naturale (€/MWh)", 0.0, 150.0, 40.0)
+            p_co2 = st.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
+            efficienza = st.slider("Efficienza Centrale (η)", 0.30, 0.65, 0.50)
         
-        prezzi_range = np.linspace(50, 250, 50)
-        margine_range = prezzi_range - costo_gas - costo_co2
-
-    elif tipo_centrale == "Carbone (CDS)":
-        p_carbone = st.sidebar.slider("Prezzo Carbone (€/MWh termico)", 0.0, 100.0, 20.0)
-        p_co2 = st.sidebar.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
-        efficienza = st.sidebar.slider("Efficienza Centrale (η)", 0.30, 0.50, 0.40)
-        ef = 0.34
+        elif tipo_centrale == "Carbone (CDS)":
+            p_carbone = st.slider("Prezzo Carbone (€/MWh termico)", 0.0, 100.0, 20.0)
+            p_co2 = st.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
+            efficienza = st.slider("Efficienza Centrale (η)", 0.30, 0.50, 0.40)
         
-        costo_carb = p_carbone / efficienza
-        costo_co2 = (p_co2 * ef) / efficienza
-        margine = p_elec - costo_carb - costo_co2
-        titolo_margine = "Clean Dark Spread (CDS)"
-
-        st.subheader("Modello Matematico")
-        st.latex(r"CDS = P_{elec} - \frac{P_{coal}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
-        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $P_{coal}$ = Prezzo Carbone | $P_{CO_2}$ = Prezzo CO2 | $\eta$ = Efficienza termica | $E_f$ = Fattore emissione carbone (0.34)")
+        elif tipo_centrale == "Idroelettrica (Biasca)":
+            costo_om = st.slider("Costi O&M Variabili (€/MWh)", 0.0, 20.0, 5.0)
         
-        prezzi_range = np.linspace(50, 250, 50)
-        margine_range = prezzi_range - costo_carb - costo_co2
+        elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
+            st.markdown("*I costi variabili sono assunti pari a zero. Nessun input richiesto.*")
 
-    elif tipo_centrale == "Idroelettrica (Biasca)":
-        costo_om = st.sidebar.slider("Costi O&M Variabili (€/MWh)", 0.0, 20.0, 5.0)
-        margine = p_elec - costo_om
-        titolo_margine = "Margine Operativo Idroelettrico"
+    # --- COLONNA DESTRA: CALCOLI E RISULTATI ---
+    with col_risultati:
+        margine = 0
+        titolo_margine = ""
 
-        st.subheader("Modello Matematico")
-        st.latex(r"Margine = P_{elec} - O\&M_{var}")
-        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $O\&M_{var}$ = Costi operativi e manutenzione (es. usura turbine)")
-        
-        prezzi_range = np.linspace(50, 250, 50)
-        margine_range = prezzi_range - costo_om
+        if tipo_centrale == "Gas Naturale (CSS)":
+            ef = 0.2
+            costo_gas = p_gas / efficienza
+            costo_co2 = (p_co2 * ef) / efficienza
+            margine = p_elec - costo_gas - costo_co2
+            titolo_margine = "Clean Spark Spread (CSS)"
 
-    elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
-        st.sidebar.markdown("Le centrali solari non sostengono costi per il combustibile o permessi CO2. I costi variabili sono assunti pari a zero.")
-        margine = p_elec
-        titolo_margine = "Margine Lordo Fotovoltaico"
+            st.subheader("Modello Matematico")
+            st.latex(r"CSS = P_{elec} - \frac{P_{gas}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
+            st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $P_{gas}$ = Prezzo Gas | $P_{CO_2}$ = Prezzo CO2 | $\eta$ = Efficienza termica | $E_f$ = Fattore emissione gas (0.2)")
+            
+            prezzi_range = np.linspace(50, 250, 50)
+            margine_range = prezzi_range - costo_gas - costo_co2
 
-        st.subheader("Modello Matematico")
-        st.latex(r"Margine = P_{elec}")
-        st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità (Correlazione 1:1)")
-        
-        prezzi_range = np.linspace(50, 250, 50)
-        margine_range = prezzi_range 
+        elif tipo_centrale == "Carbone (CDS)":
+            ef = 0.34
+            costo_carb = p_carbone / efficienza
+            costo_co2 = (p_co2 * ef) / efficienza
+            margine = p_elec - costo_carb - costo_co2
+            titolo_margine = "Clean Dark Spread (CDS)"
 
-    col_vuota_1, col_grafico, col_vuota_2 = st.columns([1, 1, 1]) 
-    with col_grafico:
+            st.subheader("Modello Matematico")
+            st.latex(r"CDS = P_{elec} - \frac{P_{coal}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
+            st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $P_{coal}$ = Prezzo Carbone | $P_{CO_2}$ = Prezzo CO2 | $\eta$ = Efficienza termica | $E_f$ = Fattore emissione carbone (0.34)")
+            
+            prezzi_range = np.linspace(50, 250, 50)
+            margine_range = prezzi_range - costo_carb - costo_co2
+
+        elif tipo_centrale == "Idroelettrica (Biasca)":
+            margine = p_elec - costo_om
+            titolo_margine = "Margine Operativo Idroelettrico"
+
+            st.subheader("Modello Matematico")
+            st.latex(r"Margine = P_{elec} - O\&M_{var}")
+            st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità | $O\&M_{var}$ = Costi operativi e manutenzione (es. usura turbine)")
+            
+            prezzi_range = np.linspace(50, 250, 50)
+            margine_range = prezzi_range - costo_om
+
+        elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
+            margine = p_elec
+            titolo_margine = "Margine Lordo Fotovoltaico"
+
+            st.subheader("Modello Matematico")
+            st.latex(r"Margine = P_{elec}")
+            st.caption("**Legenda:** $P_{elec}$ = Prezzo Elettricità (Correlazione 1:1)")
+            
+            prezzi_range = np.linspace(50, 250, 50)
+            margine_range = prezzi_range 
+
+        # Grafico spostato direttamente nella colonna di destra
         df_grafico = pd.DataFrame({'Prezzo Elettricità': prezzi_range, 'Margine': margine_range}).set_index('Prezzo Elettricità')
         st.line_chart(df_grafico, height=250)
-    
-    st.markdown("---")
+        
+        st.markdown("---")
 
-    st.subheader(f"📊 Strategia Operativa: {titolo_margine} a € {margine:.2f}")
-    
-    if margine > 0:
-        st.success("Stato: IN THE MONEY (Profitto)")
-        st.markdown("**Azioni Consigliate:**\n"
-                    "* **Impianto Fisico:** **ACCENDI** la centrale (dispatching).\n"
-                    "* **Mercati Future/Hedging:**\n"
-                    "  * **VENDI** contratti future per l'energia elettrica (blocchi il ricavo).")
-        if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
-            st.markdown(f"  * **COMPRA** contratti future per il {'gas naturale' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'}.")
-            st.markdown("  * **COMPRA** certificati di CO2.")
-    else:
-        st.error("Stato: OUT OF THE MONEY (Perdita)")
-        st.markdown("**Azioni Consigliate:**\n"
-                    "* **Impianto Fisico:** **SPEGNI** la centrale (conviene acquistare energia sul mercato piuttosto che produrla in perdita).\n"
-                    "* **Mercati Future/Hedging:**\n"
-                    "  * **COMPRA** contratti future per l'energia elettrica per soddisfare i tuoi clienti.")
-        if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
-            st.markdown(f"  * **VENDI** contratti future per il {'gas' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'}.")
-            st.markdown("  * **VENDI** certificati di CO2.")
+        st.subheader(f"📊 Strategia Operativa: {titolo_margine} a € {margine:.2f}")
+        
+        if margine > 0:
+            st.success("Stato: IN THE MONEY (Profitto)")
+            st.markdown("**Azioni Consigliate:**\n"
+                        "* **Impianto Fisico:** **ACCENDI** la centrale (dispatching).\n"
+                        "* **Mercati Future/Hedging:**\n"
+                        "  * **VENDI** contratti future per l'energia elettrica (blocchi il ricavo).")
+            if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
+                st.markdown(f"  * **COMPRA** contratti future per il {'gas naturale' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'}.")
+                st.markdown("  * **COMPRA** certificati di CO2.")
+        else:
+            st.error("Stato: OUT OF THE MONEY (Perdita)")
+            st.markdown("**Azioni Consigliate:**\n"
+                        "* **Impianto Fisico:** **SPEGNI** la centrale (conviene acquistare energia sul mercato piuttosto che produrla in perdita).\n"
+                        "* **Mercati Future/Hedging:**\n"
+                        "  * **COMPRA** contratti future per l'energia elettrica per soddisfare i tuoi clienti.")
+            if tipo_centrale in ["Gas Naturale (CSS)", "Carbone (CDS)"]:
+                st.markdown(f"  * **VENDI** contratti future per il {'gas' if tipo_centrale == 'Gas Naturale (CSS)' else 'carbone'}.")
+                st.markdown("  * **VENDI** certificati di CO2.")
 
 
 # ==========================================
@@ -169,7 +181,6 @@ with tab_reale:
         st.write("")
         st.button("⏮️ Reset (Ultimi 7 gg)", on_click=resetta_date)
 
-    # Il vecchio bottone diventa un comando di svuotamento cache
     if st.button("🚀 Forza Aggiornamento Dati (Svuota Cache)"):
         scarica_dati_entsoe.clear()
         st.success("Cache svuotata! Aggiornamento in corso...")
