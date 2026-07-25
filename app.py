@@ -36,7 +36,7 @@ if not st.session_state.authenticated:
     with c2:
         st.markdown("<h2 style='text-align: center; color: #3B82F6;'>💠 SINGULARITY OS</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align: center;'>Identificazione Biometrica / Hardware Key Richiesta</p>", unsafe_allow_html=True)
-        pwd = st.text_input("Inserisci Chiave Crittografica (Scrivi 'admin')", type="password")
+        pwd = st.text_input("Inserisci Chiave Crittografica", type="password")
         if st.button("Decripta Terminale"):
             if pwd == "admin": 
                 st.session_state.authenticated = True
