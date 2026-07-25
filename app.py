@@ -109,10 +109,10 @@ with st.sidebar:
 #    for msg in st.session_state.messages:
 #        st.markdown(f"<div class='chat-msg'><b>{msg['role'].upper()}:</b> {msg['content']}</div>", unsafe_allow_html=True)
     
-    if prompt := st.chat_input("Chiedi all'AI"):
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        st.session_state.messages.append({"role": "assistant", "content": f"Elaborazione di '{prompt}'. Il modello indica correlazione stabile."})
-        st.rerun()
+#    if prompt := st.chat_input("Chiedi all'AI"):
+#        st.session_state.messages.append({"role": "user", "content": prompt})
+#        st.session_state.messages.append({"role": "assistant", "content": f"Elaborazione di '{prompt}'. Il modello indica correlazione stabile."})
+#        st.rerun()
 
 def render_kpi(title, value, col):
     col.markdown(f"<div class='metric-container'><div class='metric-label'>{title}</div><div class='metric-val'>{value}</div></div>", unsafe_allow_html=True)
