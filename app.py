@@ -104,10 +104,10 @@ with st.sidebar:
         "🏛️ Enterprise Risk & XVA"
     ])
     
-    st.markdown("---")
-    st.markdown("### 💬 Copilot Quant LLM")
-    for msg in st.session_state.messages:
-        st.markdown(f"<div class='chat-msg'><b>{msg['role'].upper()}:</b> {msg['content']}</div>", unsafe_allow_html=True)
+#    st.markdown("---")
+#    st.markdown("### 💬 Copilot Quant LLM")
+#    for msg in st.session_state.messages:
+#        st.markdown(f"<div class='chat-msg'><b>{msg['role'].upper()}:</b> {msg['content']}</div>", unsafe_allow_html=True)
     
     if prompt := st.chat_input("Chiedi all'AI"):
         st.session_state.messages.append({"role": "user", "content": prompt})
