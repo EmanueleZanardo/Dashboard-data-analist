@@ -1,23 +1,17 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# 1. Configurazione base della pagina Streamlit
-st.set_page_config(
-    page_title="Singularity Dashboard",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Imposta il layout della pagina per utilizzare tutto lo spazio disponibile
+st.set_page_config(layout="wide", page_title="Singularity Dashboard")
 
-# 2. Tutto il nostro codice HTML, CSS e JavaScript racchiuso in una stringa Python
-# NOTA: Qui dentro possiamo usare liberamente regole CSS come "height: 100vh;" 
-# senza che Python si arrabbi, perché per lui è solo testo.
+# Inseriamo tutto il codice HTML, CSS e JS all'interno di una stringa multi-riga Python
 codice_dashboard = """
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Singularity</title>
+    <title>Dashboard Singularity - Corrected</title>
     <!-- Importa Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -35,8 +29,7 @@ codice_dashboard = """
             background-color: var(--bg-dark);
             color: var(--text-light);
             display: flex;
-            height: 100vh; /* Ora non darà più errore in Streamlit */
-            overflow: hidden; /* Nasconde le scrollbar se non necessarie */
+            height: 100vh;
         }
 
         /* --- SIDEBAR & EDU MODE FIX --- */
@@ -61,7 +54,7 @@ codice_dashboard = """
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 15px;
+            gap: 15px; /* Spazio tra lingua ed Edu Mode */
         }
 
         .lang-selector select {
@@ -79,7 +72,7 @@ codice_dashboard = """
             gap: 8px;
         }
 
-        /* IL FIX PER EDU MODE (non va a capo) */
+        /* Il fix per non far andare a capo Edu Mode */
         .edu-mode-label {
             white-space: nowrap; 
             font-size: 0.9rem;
@@ -88,6 +81,7 @@ codice_dashboard = """
             gap: 5px;
         }
 
+        /* Switch fittizio per estetica */
         .toggle-switch {
             width: 34px;
             height: 18px;
@@ -188,25 +182,28 @@ codice_dashboard = """
         };
 
         /* ==========================================
-           1. FIX GRAFICO EOLICO
+           1. FIX GRAFICO EOLICO (Crescita cubica + Plateau)
            ========================================== */
         let windSpeeds = [];
         let powerOutput = [];
-        const cutInSpeed = 3;
-        const ratedSpeed = 12;
-        const cutOutSpeed = 25;
-        const ratedPower = 3000;
+        const cutInSpeed = 3;     // Inizio generazione (m/s)
+        const ratedSpeed = 12;    // Raggiungimento potenza max (m/s)
+        const cutOutSpeed = 25;   // Spegnimento di sicurezza (m/s)
+        const ratedPower = 3000;  // Potenza nominale (MW)
 
         for (let v = 0; v <= 30; v += 0.5) {
             windSpeeds.push(v);
             if (v < cutInSpeed) {
-                powerOutput.push(0);
+                powerOutput.push(0); // Nessuna generazione
             } else if (v < ratedSpeed) {
+                // Crescita proporzionale al cubo della velocità
                 let power = ratedPower * Math.pow((v - cutInSpeed) / (ratedSpeed - cutInSpeed), 3);
                 powerOutput.push(power);
             } else if (v <= cutOutSpeed) {
+                // Plateau alla potenza nominale
                 powerOutput.push(ratedPower);
             } else {
+                // Cut-out: crollo a zero per sicurezza
                 powerOutput.push(0);
             }
         }
@@ -231,7 +228,7 @@ codice_dashboard = """
 
 
         /* ==========================================
-           2. FIX GRAFICO BACINO
+           2. FIX GRAFICO BACINO (Forma a conca/valle)
            ========================================== */
         let zData = [];
         const gridSize = 30;
@@ -240,13 +237,17 @@ codice_dashboard = """
         for (let y = 0; y < gridSize; y++) {
             let zRow = [];
             for (let x = 0; x < gridSize; x++) {
+                // Generazione di un paraboloide per simulare una valle
+                // Aggiungiamo un po' di asimmetria per renderlo più naturale
                 let distanceX = Math.pow(x - center, 2);
                 let distanceY = Math.pow(y - center, 2);
                 
+                // Formula per la depressione del terreno
                 let elevation = 400 + (0.8 * distanceX) + (1.2 * distanceY);
                 
+                // Appiattiamo il fondale del bacino e limitiamo l'altezza massima delle montagne
                 if (elevation > 600) elevation = 600; 
-                if (elevation < 420) elevation = 420; 
+                if (elevation < 420) elevation = 420; // Fondale piatto
                 
                 zRow.push(elevation);
             }
@@ -257,7 +258,7 @@ codice_dashboard = """
             z: zData,
             type: 'surface',
             colorscale: 'Blues',
-            reversescale: true,
+            reversescale: true, // L'acqua più profonda in blu scuro
             contours: {
                 z: { show: true, usecolormap: true, highlightcolor: "#fff", project: { z: true } }
             }
@@ -269,7 +270,7 @@ codice_dashboard = """
                 xaxis: { title: 'Latitudine (X)', gridcolor: '#444' },
                 yaxis: { title: 'Longitudine (Y)', gridcolor: '#444' },
                 zaxis: { title: 'Livello Acqua (m)', gridcolor: '#444', range: [400, 600] },
-                camera: { eye: { x: 1.5, y: -1.5, z: 1.2 } }
+                camera: { eye: { x: 1.5, y: -1.5, z: 1.2 } } // Angolazione di default
             },
             margin: { t: 0, r: 0, b: 0, l: 0 }
         };
@@ -280,6 +281,5 @@ codice_dashboard = """
 </html>
 """
 
-# 3. Carichiamo la stringa come componente web all'interno di Streamlit
-# Un'altezza di 800-900px solitamente è perfetta per coprire la pagina.
-components.html(codice_dashboard, height=850, scrolling=True)
+# Renderizza il codice HTML in Streamlit con un'altezza adeguata
+components.html(codice_dashboard, height=800, scrolling=True)
