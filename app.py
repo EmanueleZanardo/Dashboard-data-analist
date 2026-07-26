@@ -1,11 +1,3 @@
-import streamlit as st
-import streamlit.components.v1 as components
-
-# Imposta il layout della pagina per utilizzare tutto lo spazio disponibile
-st.set_page_config(layout="wide", page_title="Singularity Dashboard")
-
-# Inseriamo tutto il codice HTML, CSS e JS all'interno di una stringa multi-riga Python
-codice_dashboard = """
 <!DOCTYPE html>
 <html lang="it">
 <head>
@@ -279,7 +271,3 @@ codice_dashboard = """
     </script>
 </body>
 </html>
-"""
-
-# Renderizza il codice HTML in Streamlit con un'altezza adeguata
-components.html(codice_dashboard, height=800, scrolling=True)
