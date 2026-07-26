@@ -1,9 +1,23 @@
+import streamlit as st
+import streamlit.components.v1 as components
+
+# 1. Configurazione base della pagina Streamlit
+st.set_page_config(
+    page_title="Singularity Dashboard",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# 2. Tutto il nostro codice HTML, CSS e JavaScript racchiuso in una stringa Python
+# NOTA: Qui dentro possiamo usare liberamente regole CSS come "height: 100vh;" 
+# senza che Python si arrabbi, perché per lui è solo testo.
+codice_dashboard = """
 <!DOCTYPE html>
 <html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Singularity - Corrected</title>
+    <title>Dashboard Singularity</title>
     <!-- Importa Plotly.js -->
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
@@ -21,7 +35,8 @@
             background-color: var(--bg-dark);
             color: var(--text-light);
             display: flex;
-            height: 100vh;
+            height: 100vh; /* Ora non darà più errore in Streamlit */
+            overflow: hidden; /* Nasconde le scrollbar se non necessarie */
         }
 
         /* --- SIDEBAR & EDU MODE FIX --- */
@@ -46,7 +61,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 15px; /* Spazio tra lingua ed Edu Mode */
+            gap: 15px;
         }
 
         .lang-selector select {
@@ -64,7 +79,7 @@
             gap: 8px;
         }
 
-        /* Il fix per non far andare a capo Edu Mode */
+        /* IL FIX PER EDU MODE (non va a capo) */
         .edu-mode-label {
             white-space: nowrap; 
             font-size: 0.9rem;
@@ -73,7 +88,6 @@
             gap: 5px;
         }
 
-        /* Switch fittizio per estetica */
         .toggle-switch {
             width: 34px;
             height: 18px;
@@ -174,28 +188,25 @@
         };
 
         /* ==========================================
-           1. FIX GRAFICO EOLICO (Crescita cubica + Plateau)
+           1. FIX GRAFICO EOLICO
            ========================================== */
         let windSpeeds = [];
         let powerOutput = [];
-        const cutInSpeed = 3;     // Inizio generazione (m/s)
-        const ratedSpeed = 12;    // Raggiungimento potenza max (m/s)
-        const cutOutSpeed = 25;   // Spegnimento di sicurezza (m/s)
-        const ratedPower = 3000;  // Potenza nominale (MW)
+        const cutInSpeed = 3;
+        const ratedSpeed = 12;
+        const cutOutSpeed = 25;
+        const ratedPower = 3000;
 
         for (let v = 0; v <= 30; v += 0.5) {
             windSpeeds.push(v);
             if (v < cutInSpeed) {
-                powerOutput.push(0); // Nessuna generazione
+                powerOutput.push(0);
             } else if (v < ratedSpeed) {
-                // Crescita proporzionale al cubo della velocità
                 let power = ratedPower * Math.pow((v - cutInSpeed) / (ratedSpeed - cutInSpeed), 3);
                 powerOutput.push(power);
             } else if (v <= cutOutSpeed) {
-                // Plateau alla potenza nominale
                 powerOutput.push(ratedPower);
             } else {
-                // Cut-out: crollo a zero per sicurezza
                 powerOutput.push(0);
             }
         }
@@ -220,7 +231,7 @@
 
 
         /* ==========================================
-           2. FIX GRAFICO BACINO (Forma a conca/valle)
+           2. FIX GRAFICO BACINO
            ========================================== */
         let zData = [];
         const gridSize = 30;
@@ -229,17 +240,13 @@
         for (let y = 0; y < gridSize; y++) {
             let zRow = [];
             for (let x = 0; x < gridSize; x++) {
-                // Generazione di un paraboloide per simulare una valle
-                // Aggiungiamo un po' di asimmetria per renderlo più naturale
                 let distanceX = Math.pow(x - center, 2);
                 let distanceY = Math.pow(y - center, 2);
                 
-                // Formula per la depressione del terreno
                 let elevation = 400 + (0.8 * distanceX) + (1.2 * distanceY);
                 
-                // Appiattiamo il fondale del bacino e limitiamo l'altezza massima delle montagne
                 if (elevation > 600) elevation = 600; 
-                if (elevation < 420) elevation = 420; // Fondale piatto
+                if (elevation < 420) elevation = 420; 
                 
                 zRow.push(elevation);
             }
@@ -250,7 +257,7 @@
             z: zData,
             type: 'surface',
             colorscale: 'Blues',
-            reversescale: true, // L'acqua più profonda in blu scuro
+            reversescale: true,
             contours: {
                 z: { show: true, usecolormap: true, highlightcolor: "#fff", project: { z: true } }
             }
@@ -262,7 +269,7 @@
                 xaxis: { title: 'Latitudine (X)', gridcolor: '#444' },
                 yaxis: { title: 'Longitudine (Y)', gridcolor: '#444' },
                 zaxis: { title: 'Livello Acqua (m)', gridcolor: '#444', range: [400, 600] },
-                camera: { eye: { x: 1.5, y: -1.5, z: 1.2 } } // Angolazione di default
+                camera: { eye: { x: 1.5, y: -1.5, z: 1.2 } }
             },
             margin: { t: 0, r: 0, b: 0, l: 0 }
         };
@@ -271,3 +278,8 @@
     </script>
 </body>
 </html>
+"""
+
+# 3. Carichiamo la stringa come componente web all'interno di Streamlit
+# Un'altezza di 800-900px solitamente è perfetta per coprire la pagina.
+components.html(codice_dashboard, height=850, scrolling=True)
