@@ -38,7 +38,6 @@ st.markdown("""
 if 'lang' not in st.session_state: st.session_state.lang = 'IT'
 if 'edu_mode' not in st.session_state: st.session_state.edu_mode = True
 
-# Dizionario Multilingua (Parziale per concisione, adattivo)
 T = {
     'IT': {
         'auth_title': 'Identificazione Biometrica / Hardware Key Richiesta',
@@ -79,11 +78,9 @@ T = {
 }
 
 def _(key, default=None):
-    """Funzione di traduzione base"""
     return T.get(st.session_state.lang, {}).get(key, default or key)
 
 def edu(term, explanation):
-    """Genera l'HTML per il tooltip didattico se la modalità è attiva."""
     if st.session_state.edu_mode:
         return f'<div class="edu-tooltip">{term}<span class="edu-tooltiptext"><b>💡 Lo Sapevi?</b><br><br>{explanation}</span></div>'
     return term
@@ -94,7 +91,6 @@ def edu(term, explanation):
 if 'authenticated' not in st.session_state: st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    # Selettore lingua pre-auth
     lang_sel = st.selectbox("🌐 Language / Lingua / Langue", ["IT", "EN", "FR"], index=["IT", "EN", "FR"].index(st.session_state.lang))
     if lang_sel != st.session_state.lang:
         st.session_state.lang = lang_sel
@@ -262,8 +258,10 @@ if workspace == _('ws1'):
             prezzi_range = np.linspace(50, 250, 50)
             margine_range = prezzi_range 
 
-        df_grafico = pd.DataFrame({'Prezzo Elettricità': prezzi_range, 'Margine': margine_range}).set_index('Prezzo Elettricità')
-        st.line_chart(df_grafico, height=200)
+        df_grafico = pd.DataFrame({'Prezzo Elettricità (€/MWh)': prezzi_range, 'Margine (€/MWh)': margine_range})
+        fig_sim = px.line(df_grafico, x='Prezzo Elettricità (€/MWh)', y='Margine (€/MWh)', title=f"Sensibilità del Margine Operativo")
+        fig_sim.update_layout(template="plotly_dark", height=300)
+        st.plotly_chart(fig_sim, use_container_width=True)
         
         st.markdown("---")
         if margine > 0:
@@ -302,9 +300,11 @@ elif workspace == _('ws2'):
             prezzi_ch = scarica_dati_entsoe(api_key, data_inizio_selezionata, data_fine_selezionata)
             
             prezzo_spot_ch = prezzi_ch.iloc[-1]
-            data_ultimo_prezzo = prezzi_ch.index[-1].strftime('%d/%m/%Y %H:%00')
             
-            st.line_chart(prezzi_ch, height=250)
+            # Sostituita st.line_chart per supportare gli assi personalizzati
+            fig_entsoe = px.line(prezzi_ch, title="Andamento Prezzo Spot Svizzera")
+            fig_entsoe.update_layout(xaxis_title="Data e Ora", yaxis_title="Prezzo (€/MWh)", template="plotly_dark", height=350)
+            st.plotly_chart(fig_entsoe, use_container_width=True)
             
             # Calcolo dei margini fittizio
             eff_ircd = 0.25; prezzo_gas_eu = 38.5; prezzo_co2_eu = 68.0  
@@ -338,17 +338,18 @@ elif workspace == _('ws3'):
         epoches = np.arange(1000)
         reward_curve = -50 + 100 * np.log(epoches + 1) / np.log(1000) + np.random.normal(0, 5, 1000)
         fig_rl = px.line(x=epoches, y=reward_curve, title="Learning Curve dell'Agente Quantitativo")
-        fig_rl.update_layout(template="plotly_dark", xaxis_title="Epoche", yaxis_title="Reward (PnL)")
+        fig_rl.update_layout(template="plotly_dark", xaxis_title="Epoche di Addestramento", yaxis_title="Reward (PnL in €)")
         st.plotly_chart(fig_rl, use_container_width=True)
         
     with col_b:
         regime = "BULLISH" if ult['Sentiment_NLP'] > 0 else "BEARISH"
         st.markdown(f"<h3>Regime: {regime}</h3>", unsafe_allow_html=True)
-        st.write(f"**{edu('Stat Arb Z-Score', 'Statistical Arbitrage: Z-Score misura di quante deviazioni standard lo spread tra due asset (es. Gas/Power) si è discostato dalla media storica.')}:** +2.4")
+        # BUG FIX: Usato st.markdown con unsafe_allow_html per renderizzare i tag HTML del tooltip
+        st.markdown(f"**{edu('Stat Arb Z-Score', 'Statistical Arbitrage: Z-Score misura di quante deviazioni standard lo spread tra due asset (es. Gas/Power) si è discostato dalla media storica.')}:** +2.4", unsafe_allow_html=True)
         
         heatmap_lat = np.random.normal(1.5, 0.2, (5, 5))
         fig_lat = px.imshow(heatmap_lat, color_continuous_scale="RdYlGn_r", title="Network Latency (ms)")
-        fig_lat.update_layout(template="plotly_dark", height=200, margin=dict(l=0, r=0, t=30, b=0))
+        fig_lat.update_layout(template="plotly_dark", height=200, margin=dict(l=0, r=0, t=30, b=0), xaxis_title="Gateway Node", yaxis_title="Exchange Node")
         st.plotly_chart(fig_lat, use_container_width=True)
 
 # ==========================================
@@ -370,19 +371,27 @@ elif workspace == _('ws4'):
     
     col_w1, col_w2 = st.columns(2)
     with col_w1:
-        st.markdown("### Wind Power Curve")
+        # Aggiunto Edu mode alle intestazioni
+        titolo_wind = edu("Wind Power Curve", "Curva di potenza teorica di una turbina eolica. Mostra come i megawatt generati dipendano in modo non lineare (spesso cubico) dalla velocità del vento. Raggiunto il 'Rated Wind Speed', la potenza si appiattisce al massimo. Oltre il 'Cut-out Speed', la turbina si blocca per sicurezza, azzerando la produzione di colpo e causando picchi di prezzo in borsa.")
+        st.markdown(f"### {titolo_wind}", unsafe_allow_html=True)
+        
         wind_speeds = np.linspace(0, 25, 100)
         power = np.where(wind_speeds < 3, 0, np.where(wind_speeds <= 12, (wind_speeds-3)**3 * 10, np.where(wind_speeds <= 25, 3000, 0)))
         fig_wind = px.line(x=wind_speeds, y=power)
-        fig_wind.update_layout(template="plotly_dark", xaxis_title="m/s", yaxis_title="MW")
+        # Unità di misura agli assi
+        fig_wind.update_layout(template="plotly_dark", xaxis_title="Velocità Vento (m/s)", yaxis_title="Potenza Generata (MW)")
         st.plotly_chart(fig_wind, use_container_width=True)
         
     with col_w2:
-        st.markdown("### Hydro Reservoir Topography")
+        # Aggiunto Edu mode alle intestazioni
+        titolo_hydro = edu("Hydro Reservoir Topography", "Rappresentazione topografica 3D del livello dell'acqua di un bacino idroelettrico alpino. Maggiore è il volume e l'altezza dell'acqua, maggiore è l'energia potenziale accumulata (State of Charge - SoC) pronta per essere convertita in MWh alla prima occasione profittevole.")
+        st.markdown(f"### {titolo_hydro}", unsafe_allow_html=True)
+        
         X, Y = np.meshgrid(np.linspace(-5, 5, 30), np.linspace(-5, 5, 30))
         Z = np.sin(np.sqrt(X**2 + Y**2)) * 100 + 500
         fig_hydro = go.Figure(data=[go.Surface(z=Z, colorscale="Blues")])
-        fig_hydro.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=0, b=0))
+        # Unità di misura agli assi 3D
+        fig_hydro.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=0, b=0), scene=dict(xaxis_title="Latitudine (X)", yaxis_title="Longitudine (Y)", zaxis_title="Livello Acqua (m)"))
         st.plotly_chart(fig_hydro, use_container_width=True)
 
 # ==========================================
@@ -403,14 +412,16 @@ elif workspace == _('ws5'):
         smile = 0.4 + 0.0001 * (strikes - 80)**2 - 0.002 * (strikes - 80)
         fig_sabr = px.line(x=strikes, y=smile*100)
         fig_sabr.add_vline(x=80, line_dash="dash", line_color="red")
-        fig_sabr.update_layout(template="plotly_dark", xaxis_title="Strike (€/MWh)", yaxis_title="Implied Vol (%)")
+        # Unità di misura
+        fig_sabr.update_layout(template="plotly_dark", xaxis_title="Strike Price (€/MWh)", yaxis_title="Implied Volatility (%)")
         st.plotly_chart(fig_sabr, use_container_width=True)
         
     with col_e2:
         st.markdown("### 3rd Order Greeks")
-        st.write(f"🚀 **{edu('Speed', 'Variazione del Gamma rispetto a cambiamenti nel prezzo spot (Derivata terza del premio).')} (dGamma/dSpot):** -0.0014")
-        st.write(f"🎨 **{edu('Color', 'Decadimento temporale del Gamma (dGamma/dTime).')} (dGamma/dTime):** +0.0251")
-        st.write(f"🌪️ **{edu('Zomma', 'Sensibilità del Gamma ai cambiamenti di volatilità. Fondamentale per i portafogli Gamma-hedged.')} (dGamma/dVol):** +0.1042")
+        # BUG FIX: st.write non renderizzava l'HTML, cambiato in st.markdown
+        st.markdown(f"🚀 **{edu('Speed', 'Variazione del Gamma rispetto a cambiamenti nel prezzo spot (Derivata terza del premio).')} (dGamma/dSpot):** -0.0014", unsafe_allow_html=True)
+        st.markdown(f"🎨 **{edu('Color', 'Decadimento temporale del Gamma (dGamma/dTime).')} (dGamma/dTime):** +0.0251", unsafe_allow_html=True)
+        st.markdown(f"🌪️ **{edu('Zomma', 'Sensibilità del Gamma ai cambiamenti di volatilità. Fondamentale per i portafogli Gamma-hedged.')} (dGamma/dVol):** +0.1042", unsafe_allow_html=True)
 
 # ==========================================
 # WORKSPACE 6: ENTERPRISE RISK & XVA
@@ -418,7 +429,9 @@ elif workspace == _('ws5'):
 elif workspace == _('ws6'):
     st.markdown(f"<h1>{_('ws6')}</h1>", unsafe_allow_html=True)
     
-    st.error(f"🚨 **{edu('SIMM MARGIN BREACH', 'Standard Initial Margin Model: calcolo standard ISDA. Margin Breach significa che le perdite stimate superano la garanzia (collaterale) versata in borsa, innescando una chiamata a margine.')} WARNING:** ICE Endex.")
+    # BUG FIX: st.error non accetta unsafe_allow_html. Sostituito con un container personalizzato HTML
+    msg_error = edu("SIMM MARGIN BREACH", "Standard Initial Margin Model: calcolo standard ISDA. Margin Breach significa che le perdite stimate superano la garanzia (collaterale) versata in borsa, innescando una chiamata a margine immediata.")
+    st.markdown(f"<div style='background-color:rgba(255, 75, 75, 0.15); color:#ff4b4b; padding:1rem; border:1px solid #ff4b4b; border-radius:0.5rem; margin-bottom:1rem;'>🚨 **{msg_error} WARNING:** ICE Endex.</div>", unsafe_allow_html=True)
     
     c1, c2, c3, c4 = st.columns(4)
     render_kpi(edu("FRTB Expected Shortfall", "Fundamental Review of the Trading Book. L'Expected Shortfall (ES) ha sostituito il VaR per le banche. Calcola la perdita MEDIA nel peggiore X% dei casi (Coda della distribuzione)."), "€ 45.2 M", c1)
@@ -428,18 +441,20 @@ elif workspace == _('ws6'):
     
     col_r1, col_r2 = st.columns(2)
     with col_r1:
-        st.markdown(f"### {edu('Liquidity Horizon', 'Sotto le nuove norme FRTB, non puoi assumere di vendere un asset istantaneamente. Il capitale da accantonare cresce in base a quanti giorni servono per liquidare il portafoglio in caso di crisi.')}")
+        # BUG FIX: mancava l'unsafe_allow_html nelle intestazioni
+        st.markdown(f"### {edu('Liquidity Horizon', 'Sotto le nuove norme FRTB, non puoi assumere di vendere un asset istantaneamente. Il capitale da accantonare cresce in base a quanti giorni servono per liquidare il portafoglio in caso di crisi.')}", unsafe_allow_html=True)
         horizons = pd.DataFrame({"Asset Class": ["Power", "Gas", "Coal", "Carbon"], "Capital Charge": [15.2, 18.5, 8.4, 3.1]})
         fig_frtb = px.bar(horizons, x="Asset Class", y="Capital Charge")
-        fig_frtb.update_layout(template="plotly_dark", height=300)
+        fig_frtb.update_layout(template="plotly_dark", height=300, xaxis_title="Classe di Asset", yaxis_title="Capitale Assorbito (M€)")
         st.plotly_chart(fig_frtb, use_container_width=True)
         
     with col_r2:
-        st.markdown(f"### {edu('Wrong-Way Risk (WWR)', 'Si verifica quando l\'esposizione verso una controparte (EAD) aumenta in concomitanza con la probabilità di default (PD) della controparte stessa. Es: Compri opzioni Put su Enron da Enron stessa.')}")
+        # BUG FIX: mancava l'unsafe_allow_html nelle intestazioni
+        st.markdown(f"### {edu('Wrong-Way Risk (WWR)', 'Si verifica quando l\'esposizione verso una controparte (EAD) aumenta in concomitanza con la probabilità di default (PD) della controparte stessa. Es: Compri opzioni Put su Enron da Enron stessa.')}", unsafe_allow_html=True)
         ead = np.random.lognormal(mean=2, sigma=0.5, size=100)
         pd_cpty = 0.01 + ead * 0.002 + np.random.normal(0, 0.01, 100)
-        fig_wwr = px.scatter(x=ead, y=pd_cpty, labels={'x':'EAD', 'y':'Prob of Default'})
-        fig_wwr.update_layout(template="plotly_dark", height=300)
+        fig_wwr = px.scatter(x=ead, y=pd_cpty)
+        fig_wwr.update_layout(template="plotly_dark", height=300, xaxis_title="Esposizione al Default - EAD (M€)", yaxis_title="Probabilità di Default - PD (%)")
         st.plotly_chart(fig_wwr, use_container_width=True)
 
 # Footer
