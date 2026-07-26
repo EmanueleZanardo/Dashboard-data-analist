@@ -157,7 +157,6 @@ if "messages" not in st.session_state:
 with st.sidebar:
     st.markdown("<h2>💠 SINGULARITY</h2>", unsafe_allow_html=True)
     
-    # FIX: Aggiustata la proporzione delle colonne per dare più spazio a Edu Mode
     col_l, col_e = st.columns([1, 1.5])
     with col_l:
         new_lang = st.selectbox("🌐 Lang", ["IT", "EN", "FR"], index=["IT", "EN", "FR"].index(st.session_state.lang))
@@ -191,87 +190,169 @@ def render_kpi(title, value, col):
 # ==========================================
 if workspace == _('ws1'):
     st.markdown(f"<h1>{_('ws1')}</h1>", unsafe_allow_html=True)
+    st.info("📌 **Nota Operativa:** Il grafico calcola i margini operativi lordi. Attiva o disattiva le centrali per sovrapporre le rette di profittabilità e confrontare i costi marginali (Punto di Break-Even).")
+
+    # Creiamo un "contenitore" per il grafico in modo da mostrarlo IN ALTO, 
+    # ma lo popoleremo dopo aver raccolto i parametri qui sotto
+    chart_container = st.container()
+
+    st.markdown("---")
     
-    st.info("📌 **Nota Operativa:** Il margine calcolato rappresenta il margine operativo lordo.")
+    # ----------------------------------------
+    # CONTROLLI GRAFICO (MOSTRA/NASCONDI CENTRALI)
+    # ----------------------------------------
+    st.markdown(f"### 🎛️ Seleziona Livelli (Overlay Grafico)")
+    t_col1, t_col2, t_col3, t_col4 = st.columns(4)
+    show_gas = t_col1.toggle("🏭 Gas Naturale (CSS)", value=True)
+    show_coal = t_col2.toggle("⛏️ Carbone (CDS)", value=True)
+    show_hydro = t_col3.toggle("💧 Idroelettrica", value=False)
+    show_solar = t_col4.toggle("☀️ Solare", value=False)
 
-    col_parametri, col_risultati = st.columns([1, 2.5])
-
-    with col_parametri:
-        st.subheader(_('market_params'))
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.subheader(_('market_params'))
+    
+    # ----------------------------------------
+    # PARAMETRI DI MERCATO (IN BASSO)
+    # ----------------------------------------
+    param_cols = st.columns(4)
+    
+    with param_cols[0]:
+        st.markdown("**Variabili Globali**")
+        p_elec = st.number_input("Prezzo Energia Corrente (€/MWh)", min_value=0.0, max_value=400.0, value=100.0, step=1.0)
         
-        tipo_centrale = st.selectbox(
-            "Tipologia di centrale:", 
-            ["Gas Naturale (CSS)", "Carbone (CDS)", "Idroelettrica (Biasca)", "Solare Fotovoltaico (Muttsee)"],
-            help="Scegli la tecnologia. Questo cambia il calcolo del margine (Spread)."
+    costo_marginale_gas = 0
+    if show_gas:
+        with param_cols[1]:
+            st.markdown("**Impostazioni Gas**")
+            p_gas = st.number_input("Prezzo Gas (€/MWh)", value=40.0)
+            p_co2_gas = st.number_input("Prezzo CO2 (€/tCO2)", value=80.0, key="co2_gas")
+            eff_gas = st.number_input("Efficienza Gas (η)", value=0.50, step=0.01)
+            costo_marginale_gas = (p_gas / eff_gas) + (p_co2_gas * 0.2 / eff_gas)
+
+    costo_marginale_coal = 0
+    if show_coal:
+        with param_cols[2]:
+            st.markdown("**Impostazioni Carbone**")
+            p_coal = st.number_input("Prezzo Carbone (€/MWh)", value=20.0)
+            p_co2_coal = st.number_input("Prezzo CO2 (€/tCO2)", value=80.0, key="co2_coal")
+            eff_coal = st.number_input("Efficienza Carbone (η)", value=0.40, step=0.01)
+            costo_marginale_coal = (p_coal / eff_coal) + (p_co2_coal * 0.34 / eff_coal)
+
+    costo_marginale_hydro = 0
+    if show_hydro:
+        with param_cols[3]:
+            st.markdown("**Impostazioni Idroelettrica**")
+            costo_om_hydro = st.number_input("Costi O&M (€/MWh)", value=5.0)
+            costo_marginale_hydro = costo_om_hydro
+            
+    costo_marginale_solar = 0 # Il fotovoltaico ha costo marginale nullo
+
+    # ----------------------------------------
+    # CREAZIONE GRAFICO (INIETTATO IN ALTO)
+    # ----------------------------------------
+    with chart_container:
+        prezzi_range = np.linspace(0, 300, 150)
+        fig_sim = go.Figure()
+        
+        # Linea orizzontale a Zero (Break-even Y)
+        fig_sim.add_hline(y=0, line_width=1, line_dash="solid", line_color="rgba(255,255,255,0.3)")
+        
+        colors = {"Gas": "#ef4444", "Coal": "#a8a29e", "Hydro": "#3b82f6", "Solar": "#eab308"}
+        
+        if show_gas:
+            m_gas_arr = prezzi_range - costo_marginale_gas
+            fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_gas_arr, mode='lines', name="Gas Naturale (CSS)", line=dict(color=colors["Gas"], width=3)))
+            # Break-even Verticale
+            fig_sim.add_vline(x=costo_marginale_gas, line_dash="dot", line_color=colors["Gas"], annotation_text=f" BE Gas: {costo_marginale_gas:.1f} €", annotation_position="bottom right")
+            
+        if show_coal:
+            m_coal_arr = prezzi_range - costo_marginale_coal
+            fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_coal_arr, mode='lines', name="Carbone (CDS)", line=dict(color=colors["Coal"], width=3)))
+            # Break-even Verticale
+            fig_sim.add_vline(x=costo_marginale_coal, line_dash="dot", line_color=colors["Coal"], annotation_text=f" BE Coal: {costo_marginale_coal:.1f} €", annotation_position="top right")
+
+        if show_hydro:
+            m_hydro_arr = prezzi_range - costo_marginale_hydro
+            fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_hydro_arr, mode='lines', name="Idroelettrica", line=dict(color=colors["Hydro"], width=3)))
+            # Break-even Verticale
+            fig_sim.add_vline(x=costo_marginale_hydro, line_dash="dot", line_color=colors["Hydro"], annotation_text=f" BE Idro: {costo_marginale_hydro:.1f} €", annotation_position="bottom right")
+
+        if show_solar:
+            m_solar_arr = prezzi_range - costo_marginale_solar
+            fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_solar_arr, mode='lines', name="Solare", line=dict(color=colors["Solar"], width=3)))
+            # Break-even Verticale
+            fig_sim.add_vline(x=costo_marginale_solar, line_dash="dot", line_color=colors["Solar"], annotation_text=" BE Solare: 0 €", annotation_position="top right")
+
+        fig_sim.update_layout(
+            title="Confronto Margini Operativi (Merit Order Simulation)",
+            xaxis_title="Prezzo Elettricità (€/MWh)",
+            yaxis_title="Margine (€/MWh)",
+            template="plotly_dark",
+            height=450,
+            hovermode="x unified",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-
-        p_elec = st.slider("Prezzo Energia (€/MWh)", 0.0, 300.0, 100.0, help="Prezzo di vendita dell'energia sul mercato Day-Ahead.")
-
-        if tipo_centrale == "Gas Naturale (CSS)":
-            p_gas = st.slider("Prezzo Gas Naturale (€/MWh)", 0.0, 150.0, 40.0, help="Costo della materia prima (Gas TTF).")
-            p_co2 = st.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0, help="Costo dei permessi di emissione (EUA).")
-            efficienza = st.slider("Efficienza Centrale (η)", 0.30, 0.65, 0.50, help="Quanta energia termica viene convertita in elettrica (es. 50%).")
-        elif tipo_centrale == "Carbone (CDS)":
-            p_carbone = st.slider("Prezzo Carbone (€/MWh)", 0.0, 100.0, 20.0)
-            p_co2 = st.slider("Prezzo CO2 (€/tCO2)", 0.0, 150.0, 80.0)
-            efficienza = st.slider("Efficienza Centrale (η)", 0.30, 0.50, 0.40)
-        elif tipo_centrale == "Idroelettrica (Biasca)":
-            costo_om = st.slider("Costi O&M (€/MWh)", 0.0, 20.0, 5.0, help="Costo usura turbine.")
-        elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
-            st.markdown("*Nessun input richiesto (Costo marginale nullo).*")
-
-    with col_risultati:
-        margine = 0
-        if tipo_centrale == "Gas Naturale (CSS)":
-            ef = 0.2
-            costo_gas = p_gas / efficienza
-            costo_co2 = (p_co2 * ef) / efficienza
-            margine = p_elec - costo_gas - costo_co2
-            
-            titolo_html = edu("Clean Spark Spread (CSS)", "Il Clean Spark Spread è un indicatore fondamentale: indica il profitto teorico di una centrale a gas dopo aver pagato il gas e i permessi per inquinare (CO2). Se è negativo, la centrale brucia soldi se accesa.")
-            st.markdown(f"<h3>Modello: {titolo_html}</h3>", unsafe_allow_html=True)
-            
-            st.latex(r"CSS = P_{elec} - \frac{P_{gas}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
-            prezzi_range = np.linspace(50, 250, 50)
-            margine_range = prezzi_range - costo_gas - costo_co2
-
-        elif tipo_centrale == "Carbone (CDS)":
-            ef = 0.34
-            costo_carb = p_carbone / efficienza
-            costo_co2 = (p_co2 * ef) / efficienza
-            margine = p_elec - costo_carb - costo_co2
-            
-            titolo_html = edu("Clean Dark Spread (CDS)", "Il Clean Dark Spread è il profitto teorico di una centrale a CARBONE. A causa del fattore di emissione elevato (0.34 contro 0.2 del gas), è molto sensibile ai prezzi della CO2.")
-            st.markdown(f"<h3>Modello: {titolo_html}</h3>", unsafe_allow_html=True)
-            
-            st.latex(r"CDS = P_{elec} - \frac{P_{coal}}{\eta} - \frac{P_{CO_2} \cdot E_f}{\eta}")
-            prezzi_range = np.linspace(50, 250, 50)
-            margine_range = prezzi_range - costo_carb - costo_co2
-
-        elif tipo_centrale == "Idroelettrica (Biasca)":
-            margine = p_elec - costo_om
-            st.markdown(f"<h3>{edu('Dispatching Idroelettrico', 'A differenza del solare, l\'acqua nei bacini idroelettrici ha un costo opportunità. Si decide di far cadere l\'acqua solo quando il prezzo di mercato copre l\'usura delle turbine (O&M)')}</h3>", unsafe_allow_html=True)
-            st.latex(r"Margine = P_{elec} - O\&M_{var}")
-            prezzi_range = np.linspace(50, 250, 50)
-            margine_range = prezzi_range - costo_om
-
-        elif tipo_centrale == "Solare Fotovoltaico (Muttsee)":
-            margine = p_elec
-            st.markdown(f"<h3>{edu('Merit Order (Rinnovabili)', 'Il solare ha un costo marginale (MC) pari a ZERO. Il sole è gratis. Per questo motivo entra per primo nella curva di offerta del mercato elettrico (Merit Order Effect), abbassando i prezzi.')}</h3>", unsafe_allow_html=True)
-            st.latex(r"Margine = P_{elec}")
-            prezzi_range = np.linspace(50, 250, 50)
-            margine_range = prezzi_range 
-
-        df_grafico = pd.DataFrame({'Prezzo Elettricità (€/MWh)': prezzi_range, 'Margine (€/MWh)': margine_range})
-        fig_sim = px.line(df_grafico, x='Prezzo Elettricità (€/MWh)', y='Margine (€/MWh)', title=f"Sensibilità del Margine Operativo")
-        fig_sim.update_layout(template="plotly_dark", height=300)
         st.plotly_chart(fig_sim, use_container_width=True)
+
+    # ----------------------------------------
+    # SOMMARIO FORMULE E CALCOLO ISTANTANEO
+    # ----------------------------------------
+    st.markdown("---")
+    
+    calc_cols = st.columns(2)
+    with calc_cols[0]:
+        st.markdown("### Modelli Matematici e Formule")
+        if show_gas:
+            st.markdown(f"**{edu('Clean Spark Spread (CSS)', 'Indica il profitto teorico di una centrale a gas dopo aver pagato il gas e i permessi per inquinare (CO2).')}**")
+            st.markdown("$$CSS = P_{elec} - \\frac{P_{gas}}{\\eta} - \\frac{P_{CO_2} \\cdot E_f}{\\eta}$$")
+        if show_coal:
+            st.markdown(f"**{edu('Clean Dark Spread (CDS)', 'Il profitto teorico di una centrale a CARBONE. A causa del fattore di emissione elevato (0.34 contro 0.2 del gas), è molto sensibile ai prezzi della CO2.')}**")
+            st.markdown("$$CDS = P_{elec} - \\frac{P_{coal}}{\\eta} - \\frac{P_{CO_2} \\cdot E_f}{\\eta}$$")
+        if show_hydro:
+            st.markdown(f"**{edu('Dispatching Idroelettrico', 'Si decide di far cadere l\'acqua dai bacini solo quando il prezzo di mercato copre l\'usura meccanica delle turbine (O&M)')}**")
+            st.markdown("$$Margine = P_{elec} - O\\&M_{var}$$")
+        if show_solar:
+            st.markdown(f"**{edu('Merit Order (Rinnovabili)', 'Il solare ha un costo marginale (MC) pari a ZERO. Il sole è gratis.')}**")
+            st.markdown("$$Margine = P_{elec}$$")
+
+    with calc_cols[1]:
+        st.markdown(f"### Analisi di Profitto Istantaneo")
+        st.markdown(f"*Calcolato al Prezzo Corrente inserito: **{p_elec} €/MWh***")
         
-        st.markdown("---")
-        if margine > 0:
-            st.success(f"**IN THE MONEY (Profitto): € {margine:.2f}** - L'AI suggerisce di ACCENDERE l'impianto e vendere Futures a copertura.")
-        else:
-            st.error(f"**OUT OF THE MONEY (Perdita): € {margine:.2f}** - L'AI suggerisce di SPEGNERE l'impianto (Mothballing).")
+        res_cols = st.columns(2)
+        idx = 0
+        
+        if show_gas:
+            margine = p_elec - costo_marginale_gas
+            col_target = res_cols[idx % 2]
+            color = "#10B981" if margine > 0 else "#EF4444"
+            status = "🟢 ON (In-the-Money)" if margine > 0 else "🔴 OFF (Out-of-Money)"
+            col_target.markdown(f"<div style='background:#1F2937; padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid {color};'><b>Gas Naturale</b><br><span style='font-size:20px; font-weight:bold; color:{color};'>€ {margine:.2f}</span><br><span style='font-size:12px;'>AI Status: {status}</span></div>", unsafe_allow_html=True)
+            idx += 1
+            
+        if show_coal:
+            margine = p_elec - costo_marginale_coal
+            col_target = res_cols[idx % 2]
+            color = "#10B981" if margine > 0 else "#EF4444"
+            status = "🟢 ON (In-the-Money)" if margine > 0 else "🔴 OFF (Out-of-Money)"
+            col_target.markdown(f"<div style='background:#1F2937; padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid {color};'><b>Carbone</b><br><span style='font-size:20px; font-weight:bold; color:{color};'>€ {margine:.2f}</span><br><span style='font-size:12px;'>AI Status: {status}</span></div>", unsafe_allow_html=True)
+            idx += 1
+            
+        if show_hydro:
+            margine = p_elec - costo_marginale_hydro
+            col_target = res_cols[idx % 2]
+            color = "#10B981" if margine > 0 else "#EF4444"
+            status = "🟢 ON (In-the-Money)" if margine > 0 else "🔴 OFF (Out-of-Money)"
+            col_target.markdown(f"<div style='background:#1F2937; padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid {color};'><b>Idroelettrica</b><br><span style='font-size:20px; font-weight:bold; color:{color};'>€ {margine:.2f}</span><br><span style='font-size:12px;'>AI Status: {status}</span></div>", unsafe_allow_html=True)
+            idx += 1
+            
+        if show_solar:
+            margine = p_elec - costo_marginale_solar
+            col_target = res_cols[idx % 2]
+            color = "#10B981" if margine > 0 else "#EF4444"
+            status = "🟢 ON (In-the-Money)" if margine > 0 else "🔴 OFF (Out-of-Money)"
+            col_target.markdown(f"<div style='background:#1F2937; padding:10px; border-radius:8px; margin-bottom:10px; border-left:4px solid {color};'><b>Solare</b><br><span style='font-size:20px; font-weight:bold; color:{color};'>€ {margine:.2f}</span><br><span style='font-size:12px;'>AI Status: {status}</span></div>", unsafe_allow_html=True)
+            idx += 1
 
 # ==========================================
 # WORKSPACE 2: DATI REALI SVIZZERI (ENTSO-E)
@@ -376,10 +457,8 @@ elif workspace == _('ws4'):
         titolo_wind = edu("Wind Power Curve", "Curva di potenza teorica di una turbina eolica. Mostra come i megawatt generati dipendano in modo non lineare (spesso cubico) dalla velocità del vento. Raggiunto il 'Rated Wind Speed', la potenza si appiattisce al massimo. Oltre il 'Cut-out Speed', la turbina si blocca per sicurezza, azzerando la produzione di colpo e causando picchi di prezzo in borsa.")
         st.markdown(f"### {titolo_wind}", unsafe_allow_html=True)
         
-        # FIX: Curva eolica reale. Crescita cubica fino alla rated power (3000MW), plateau, poi cut-out a zero.
         wind_speeds = np.linspace(0, 30, 200)
         rated_power = 3000
-        # Formula: (v - cut_in) / (rated_speed - cut_in) elevato al cubo
         power = np.where(wind_speeds < 3, 0, 
                 np.where(wind_speeds <= 12, rated_power * ((wind_speeds - 3) / 9)**3, 
                 np.where(wind_speeds <= 25, rated_power, 0)))
@@ -392,13 +471,10 @@ elif workspace == _('ws4'):
         titolo_hydro = edu("Hydro Reservoir Topography", "Rappresentazione topografica 3D del livello dell'acqua di un bacino idroelettrico alpino. Maggiore è il volume e l'altezza dell'acqua, maggiore è l'energia potenziale accumulata (State of Charge - SoC) pronta per essere convertita in MWh alla prima occasione profittevole.")
         st.markdown(f"### {titolo_hydro}", unsafe_allow_html=True)
         
-        # FIX: Generazione di una vera valle parabolica al posto di un picco astratto.
         X, Y = np.meshgrid(np.linspace(-5, 5, 30), np.linspace(-5, 5, 30))
         Z = (X**2 * 0.8 + Y**2 * 1.2) * 5 + 400
-        # Tagliamo la base per fare un lago piatto e limitiamo l'altezza delle montagne
         Z = np.clip(Z, 420, 600) 
         
-        # reversescale=True rende l'acqua più profonda blu scuro e i monti bianchi
         fig_hydro = go.Figure(data=[go.Surface(z=Z, colorscale="Blues", reversescale=True)])
         fig_hydro.update_layout(template="plotly_dark", height=300, margin=dict(l=0, r=0, t=0, b=0), scene=dict(xaxis_title="Latitudine (X)", yaxis_title="Longitudine (Y)", zaxis_title="Livello Acqua (m)"))
         st.plotly_chart(fig_hydro, use_container_width=True)
@@ -436,7 +512,7 @@ elif workspace == _('ws5'):
 elif workspace == _('ws6'):
     st.markdown(f"<h1>{_('ws6')}</h1>", unsafe_allow_html=True)
     
-    msg_error = edu("SIMM MARGIN BREACH", "Standard Initial Margin Model: calcolo standard ISDA. Margin Breach significa che le perdite stimate superano la garanzia (collaterale) versata in borsa, innescando una chiamata a margine immediata.")
+    msg_error = edu("SIMM MARGIN Breach", "Standard Initial Margin Model: calcolo standard ISDA. Margin Breach significa che le perdite stimate superano la garanzia (collaterale) versata in borsa, innescando una chiamata a margine immediata.")
     st.markdown(f"<div style='background-color:rgba(255, 75, 75, 0.15); color:#ff4b4b; padding:1rem; border:1px solid #ff4b4b; border-radius:0.5rem; margin-bottom:1rem;'>🚨 **{msg_error} WARNING:** ICE Endex.</div>", unsafe_allow_html=True)
     
     c1, c2, c3, c4 = st.columns(4)
