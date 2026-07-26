@@ -385,21 +385,124 @@ elif workspace == _('ws2'):
             prezzi_ch = scarica_dati_entsoe(api_key, data_inizio_selezionata, data_fine_selezionata)
             
             prezzo_spot_ch = prezzi_ch.iloc[-1]
+            # L'integrale orario equivale alla somma del prezzo moltiplicata per le ore (1h ciascuna)
+            valore_integrale = prezzi_ch.sum()
             
-            fig_entsoe = px.line(prezzi_ch, title="Andamento Prezzo Spot Svizzera")
-            fig_entsoe.update_layout(xaxis_title="Data e Ora", yaxis_title="Prezzo (€/MWh)", template="plotly_dark", height=350)
+            # --- GRAFICO 1: Prezzi Day-Ahead con Area ---
+            fig_entsoe = go.Figure()
+            fig_entsoe.add_trace(go.Scatter(
+                x=prezzi_ch.index, 
+                y=prezzi_ch.values, 
+                fill='tozeroy', 
+                fillcolor='rgba(59, 130, 246, 0.2)',
+                mode='lines',
+                line=dict(color='#3b82f6', width=2),
+                name="Prezzo Spot (€/MWh)"
+            ))
+            fig_entsoe.update_layout(
+                title=f"Andamento Prezzo Spot & Integrale del Valore (Totale Baseload 1 MW: {valore_integrale:,.0f} €)",
+                xaxis_title="Data e Ora", 
+                yaxis_title="Prezzo (€/MWh)", 
+                template="plotly_dark", 
+                height=350,
+                margin=dict(l=40, r=40, t=40, b=40)
+            )
             st.plotly_chart(fig_entsoe, use_container_width=True)
             
-            # Calcolo dei margini fittizio
+            # Calcolo dei Costi Marginali
             eff_ircd = 0.25; prezzo_gas_eu = 38.5; prezzo_co2_eu = 68.0  
-            margine_ircd = prezzo_spot_ch - (prezzo_gas_eu / eff_ircd) - (prezzo_co2_eu * 0.2 / eff_ircd) 
+            mc_gas = (prezzo_gas_eu / eff_ircd) + (prezzo_co2_eu * 0.2 / eff_ircd) 
+            mc_hydro = 5.0
+            mc_solar = 0.0
+
+            margine_ircd = prezzo_spot_ch - mc_gas
+            margine_hydro = prezzo_spot_ch - mc_hydro
+            margine_solar = prezzo_spot_ch - mc_solar
             
-            st.subheader("Margini Operativi Istantanei")
+            st.subheader("Margini Operativi Istantanei (Sull'ultima candela oraria)")
             col1, col2, col3 = st.columns(3)
             
             col1.metric(label="🏭 IRCD Giubiasco", value=f"€ {margine_ircd:.2f}", delta="Termovalorizzatore (Proxy Gas)", help="Margine per un impianto WtE (Waste-to-Energy)")
-            col2.metric(label="💧 Centrale Biasca", value=f"€ {prezzo_spot_ch - 5.0:.2f}", delta="Idroelettrico", help="Margine decurtato dai costi di O&M")
-            col3.metric(label="☀️ Diga del Muttsee", value=f"€ {prezzo_spot_ch:.2f}", delta="Solare d'Alta Quota", help="Impianto solare alpino, massima efficienza invernale.")
+            col2.metric(label="💧 Centrale Biasca", value=f"€ {margine_hydro:.2f}", delta="Idroelettrico", help="Margine decurtato dai costi di O&M")
+            col3.metric(label="☀️ Diga del Muttsee", value=f"€ {margine_solar:.2f}", delta="Solare d'Alta Quota", help="Impianto solare alpino, massima efficienza invernale.")
+            
+            st.markdown("---")
+
+            # --- GRAFICO 2: MERIT ORDER & PRODUZIONE STIMATA ---
+            titolo_mo = edu("Merit Order & Produzione Stimata", "Il Merit Order mette in fila le centrali dalla più economica (Rinnovabili) alla più costosa (Gas/Carbone). L'intersezione con la domanda determina il prezzo. Qui mostriamo anche la stima dell'energia prodotta nel timeframe calcolando quante ore la singola centrale è risultata 'In-The-Money' (Prezzo Spot > Costo Marginale).")
+            st.markdown(f"### {titolo_mo}", unsafe_allow_html=True)
+
+            # Ipotesi Parametri per le centrali
+            cap_solar = 50   # MW
+            cap_hydro = 250  # MW
+            cap_gas = 100    # MW
+            tot_hours = len(prezzi_ch)
+            
+            # Logica di produzione stimata:
+            # 1. Solare: produce energia diurna (approssimata al 30% del tempo totale nel timeframe)
+            prod_solar = cap_solar * (tot_hours * 0.30)
+            
+            # 2. Idro: si accende quando il prezzo spot è superiore ai suoi costi di manutenzione (O&M)
+            ore_in_money_hydro = (prezzi_ch > mc_hydro).sum()
+            prod_hydro = cap_hydro * ore_in_money_hydro
+            
+            # 3. Gas WtE: si accende quando copre il costo di materia prima e permessi CO2
+            ore_in_money_gas = (prezzi_ch > mc_gas).sum()
+            prod_gas = cap_gas * ore_in_money_gas
+            
+            # Dataframe strutturato per il plotting del Merit Order
+            df_mo = pd.DataFrame({
+                "Centrale": ["☀️ Solare (Muttsee)", "💧 Idro (Biasca)", "🏭 Gas WtE (Giubiasco)"],
+                "Marginal_Cost": [mc_solar, mc_hydro, mc_gas],
+                "Capacity": [cap_solar, cap_hydro, cap_gas],
+                "Production": [prod_solar, prod_hydro, prod_gas],
+                "Color": ["#eab308", "#3b82f6", "#ef4444"]
+            }).sort_values(by="Marginal_Cost") # Il Merit Order si ordina sempre per costo marginale
+            
+            # Calcoliamo i "gradini" e il centro per le colonne di plot
+            df_mo['Cum_Capacity'] = df_mo['Capacity'].cumsum()
+            df_mo['X_Center'] = df_mo['Cum_Capacity'] - (df_mo['Capacity'] / 2)
+            
+            fig_mo = go.Figure()
+            
+            for i, row in df_mo.iterrows():
+                fig_mo.add_trace(go.Bar(
+                    x=[row['X_Center']],
+                    y=[row['Marginal_Cost']],
+                    width=[row['Capacity']],
+                    marker_color=row['Color'],
+                    name=row['Centrale'],
+                    text=f"Prod. Stima:<br><b>{row['Production']:,.0f} MWh</b>",
+                    textposition="outside",
+                    hovertemplate=(
+                        f"<b>{row['Centrale']}</b><br>" +
+                        "Costo Marginale: %{y:.1f} €/MWh<br>" +
+                        "Capacità: %{width} MW<br>" +
+                        f"Prod. Timeframe: {row['Production']:,.0f} MWh<extra></extra>"
+                    )
+                ))
+            
+            # Aggiunta indicatore di Prezzo Medio
+            avg_price = prezzi_ch.mean()
+            fig_mo.add_hline(y=avg_price, line_dash="dot", line_color="white", 
+                             annotation_text=f"Prezzo Medio Timeframe: {avg_price:.1f} €/MWh", 
+                             annotation_position="top left")
+            
+            fig_mo.update_layout(
+                title="Curva di Offerta Aggregata (Merit Order)",
+                xaxis_title="Capacità Cumulata (MW)",
+                yaxis_title="Costo Marginale (€/MWh)",
+                template="plotly_dark",
+                barmode='overlay',
+                height=400,
+                showlegend=True,
+                margin=dict(t=50, b=50, l=50, r=50)
+            )
+            # Rende il grafico aderente alla scala senza spazi bianchi, mimando una vera step-curve
+            fig_mo.update_xaxes(range=[0, df_mo['Cum_Capacity'].max() + 50])
+            fig_mo.update_yaxes(range=[0, max(mc_gas * 1.3, avg_price * 1.3)])
+            
+            st.plotly_chart(fig_mo, use_container_width=True)
             
     except Exception as e:
         st.error(f"Errore connessione ENTSO-E: {e}")
