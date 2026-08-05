@@ -51,6 +51,7 @@ T = {
         'ws4': '🌍 Climate & Grid Intel',
         'ws5': '📈 Exotics & Structuring',
         'ws6': '🏛️ Enterprise Risk & XVA',
+        'ws7': '✨ Nuova Funzione (In Sviluppo)',
         'prompt': 'Chiedi all\'AI',
         'market_params': '⚙️ Parametri di Mercato'
     },
@@ -63,6 +64,7 @@ T = {
         'ws4': '🌍 Climate & Grid Intel',
         'ws5': '📈 Exotics & Structuring',
         'ws6': '🏛️ Enterprise Risk & XVA',
+        'ws7': '✨ New Feature (In Development)',
         'prompt': 'Ask AI Copilot',
         'market_params': '⚙️ Market Parameters'
     },
@@ -75,6 +77,7 @@ T = {
         'ws4': '🌍 Climat & Réseau Intel',
         'ws5': '📈 Exotiques & Structuration',
         'ws6': '🏛️ Risque d\'Entreprise & XVA',
+        'ws7': '✨ Nouvelle Fonction (En Développement)',
         'prompt': 'Demander à l\'IA',
         'market_params': '⚙️ Paramètres du Marché'
     }
@@ -169,7 +172,7 @@ with st.sidebar:
     st.markdown("---")
     
     workspace = st.radio("🏢 WORKSPACES", [
-        _('ws1'), _('ws2'), _('ws3'), _('ws4'), _('ws5'), _('ws6')
+        _('ws1'), _('ws2'), _('ws3'), _('ws4'), _('ws5'), _('ws6'), _('ws7')
     ])
     
     st.markdown("---")
@@ -192,15 +195,9 @@ if workspace == _('ws1'):
     st.markdown(f"<h1>{_('ws1')}</h1>", unsafe_allow_html=True)
     st.info("📌 **Nota Operativa:** Il grafico calcola i margini operativi lordi. Attiva o disattiva le centrali per sovrapporre le rette di profittabilità e confrontare i costi marginali (Punto di Break-Even).")
 
-    # Creiamo un "contenitore" per il grafico in modo da mostrarlo IN ALTO, 
-    # ma lo popoleremo dopo aver raccolto i parametri qui sotto
     chart_container = st.container()
-
     st.markdown("---")
     
-    # ----------------------------------------
-    # CONTROLLI GRAFICO (MOSTRA/NASCONDI CENTRALI)
-    # ----------------------------------------
     st.markdown(f"### 🎛️ Seleziona Livelli (Overlay Grafico)")
     t_col1, t_col2, t_col3, t_col4 = st.columns(4)
     show_gas = t_col1.toggle("🏭 Gas Naturale (CSS)", value=True)
@@ -211,11 +208,7 @@ if workspace == _('ws1'):
     st.markdown("<br>", unsafe_allow_html=True)
     st.subheader(_('market_params'))
     
-    # ----------------------------------------
-    # PARAMETRI DI MERCATO (IN BASSO)
-    # ----------------------------------------
     param_cols = st.columns(4)
-    
     with param_cols[0]:
         st.markdown("**Variabili Globali**")
         p_elec = st.number_input("Prezzo Energia Corrente (€/MWh)", min_value=0.0, max_value=400.0, value=100.0, step=1.0)
@@ -245,42 +238,33 @@ if workspace == _('ws1'):
             costo_om_hydro = st.number_input("Costi O&M (€/MWh)", value=5.0)
             costo_marginale_hydro = costo_om_hydro
             
-    costo_marginale_solar = 0 # Il fotovoltaico ha costo marginale nullo
+    costo_marginale_solar = 0 
 
-    # ----------------------------------------
-    # CREAZIONE GRAFICO (INIETTATO IN ALTO)
-    # ----------------------------------------
     with chart_container:
         prezzi_range = np.linspace(0, 300, 150)
         fig_sim = go.Figure()
         
-        # Linea orizzontale a Zero (Break-even Y)
         fig_sim.add_hline(y=0, line_width=1, line_dash="solid", line_color="rgba(255,255,255,0.3)")
-        
         colors = {"Gas": "#ef4444", "Coal": "#a8a29e", "Hydro": "#3b82f6", "Solar": "#eab308"}
         
         if show_gas:
             m_gas_arr = prezzi_range - costo_marginale_gas
             fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_gas_arr, mode='lines', name="Gas Naturale (CSS)", line=dict(color=colors["Gas"], width=3)))
-            # Break-even Verticale
             fig_sim.add_vline(x=costo_marginale_gas, line_dash="dot", line_color=colors["Gas"], annotation_text=f" BE Gas: {costo_marginale_gas:.1f} €", annotation_position="bottom right")
             
         if show_coal:
             m_coal_arr = prezzi_range - costo_marginale_coal
             fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_coal_arr, mode='lines', name="Carbone (CDS)", line=dict(color=colors["Coal"], width=3)))
-            # Break-even Verticale
             fig_sim.add_vline(x=costo_marginale_coal, line_dash="dot", line_color=colors["Coal"], annotation_text=f" BE Coal: {costo_marginale_coal:.1f} €", annotation_position="top right")
 
         if show_hydro:
             m_hydro_arr = prezzi_range - costo_marginale_hydro
             fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_hydro_arr, mode='lines', name="Idroelettrica", line=dict(color=colors["Hydro"], width=3)))
-            # Break-even Verticale
             fig_sim.add_vline(x=costo_marginale_hydro, line_dash="dot", line_color=colors["Hydro"], annotation_text=f" BE Idro: {costo_marginale_hydro:.1f} €", annotation_position="bottom right")
 
         if show_solar:
             m_solar_arr = prezzi_range - costo_marginale_solar
             fig_sim.add_trace(go.Scatter(x=prezzi_range, y=m_solar_arr, mode='lines', name="Solare", line=dict(color=colors["Solar"], width=3)))
-            # Break-even Verticale
             fig_sim.add_vline(x=costo_marginale_solar, line_dash="dot", line_color=colors["Solar"], annotation_text=" BE Solare: 0 €", annotation_position="top right")
 
         fig_sim.update_layout(
@@ -294,9 +278,6 @@ if workspace == _('ws1'):
         )
         st.plotly_chart(fig_sim, use_container_width=True)
 
-    # ----------------------------------------
-    # SOMMARIO FORMULE E CALCOLO ISTANTANEO
-    # ----------------------------------------
     st.markdown("---")
     
     calc_cols = st.columns(2)
@@ -385,10 +366,8 @@ elif workspace == _('ws2'):
             prezzi_ch = scarica_dati_entsoe(api_key, data_inizio_selezionata, data_fine_selezionata)
             
             prezzo_spot_ch = prezzi_ch.iloc[-1]
-            # L'integrale orario equivale alla somma del prezzo moltiplicata per le ore (1h ciascuna)
             valore_integrale = prezzi_ch.sum()
             
-            # --- GRAFICO 1: Prezzi Day-Ahead con Area ---
             fig_entsoe = go.Figure()
             fig_entsoe.add_trace(go.Scatter(
                 x=prezzi_ch.index, 
@@ -409,7 +388,6 @@ elif workspace == _('ws2'):
             )
             st.plotly_chart(fig_entsoe, use_container_width=True)
             
-            # Calcolo dei Costi Marginali
             eff_ircd = 0.25; prezzo_gas_eu = 38.5; prezzo_co2_eu = 68.0  
             mc_gas = (prezzo_gas_eu / eff_ircd) + (prezzo_co2_eu * 0.2 / eff_ircd) 
             mc_hydro = 5.0
@@ -428,38 +406,28 @@ elif workspace == _('ws2'):
             
             st.markdown("---")
 
-            # --- GRAFICO 2: MERIT ORDER & PRODUZIONE STIMATA ---
             titolo_mo = edu("Merit Order & Produzione Stimata", "Il Merit Order mette in fila le centrali dalla più economica (Rinnovabili) alla più costosa (Gas/Carbone). L'intersezione con la domanda determina il prezzo. Qui mostriamo anche la stima dell'energia prodotta nel timeframe calcolando quante ore la singola centrale è risultata 'In-The-Money' (Prezzo Spot > Costo Marginale).")
             st.markdown(f"### {titolo_mo}", unsafe_allow_html=True)
 
-            # Ipotesi Parametri per le centrali
-            cap_solar = 50   # MW
-            cap_hydro = 250  # MW
-            cap_gas = 100    # MW
+            cap_solar = 50   
+            cap_hydro = 250  
+            cap_gas = 100    
             tot_hours = len(prezzi_ch)
             
-            # Logica di produzione stimata:
-            # 1. Solare: produce energia diurna (approssimata al 30% del tempo totale nel timeframe)
             prod_solar = cap_solar * (tot_hours * 0.30)
-            
-            # 2. Idro: si accende quando il prezzo spot è superiore ai suoi costi di manutenzione (O&M)
             ore_in_money_hydro = (prezzi_ch > mc_hydro).sum()
             prod_hydro = cap_hydro * ore_in_money_hydro
-            
-            # 3. Gas WtE: si accende quando copre il costo di materia prima e permessi CO2
             ore_in_money_gas = (prezzi_ch > mc_gas).sum()
             prod_gas = cap_gas * ore_in_money_gas
             
-            # Dataframe strutturato per il plotting del Merit Order
             df_mo = pd.DataFrame({
                 "Centrale": ["☀️ Solare (Muttsee)", "💧 Idro (Biasca)", "🏭 Gas WtE (Giubiasco)"],
                 "Marginal_Cost": [mc_solar, mc_hydro, mc_gas],
                 "Capacity": [cap_solar, cap_hydro, cap_gas],
                 "Production": [prod_solar, prod_hydro, prod_gas],
                 "Color": ["#eab308", "#3b82f6", "#ef4444"]
-            }).sort_values(by="Marginal_Cost") # Il Merit Order si ordina sempre per costo marginale
+            }).sort_values(by="Marginal_Cost") 
             
-            # Calcoliamo i "gradini" e il centro per le colonne di plot
             df_mo['Cum_Capacity'] = df_mo['Capacity'].cumsum()
             df_mo['X_Center'] = df_mo['Cum_Capacity'] - (df_mo['Capacity'] / 2)
             
@@ -482,7 +450,6 @@ elif workspace == _('ws2'):
                     )
                 ))
             
-            # Aggiunta indicatore di Prezzo Medio
             avg_price = prezzi_ch.mean()
             fig_mo.add_hline(y=avg_price, line_dash="dot", line_color="white", 
                              annotation_text=f"Prezzo Medio Timeframe: {avg_price:.1f} €/MWh", 
@@ -498,7 +465,6 @@ elif workspace == _('ws2'):
                 showlegend=True,
                 margin=dict(t=50, b=50, l=50, r=50)
             )
-            # Rende il grafico aderente alla scala senza spazi bianchi, mimando una vera step-curve
             fig_mo.update_xaxes(range=[0, df_mo['Cum_Capacity'].max() + 50])
             fig_mo.update_yaxes(range=[0, max(mc_gas * 1.3, avg_price * 1.3)])
             
@@ -639,6 +605,19 @@ elif workspace == _('ws6'):
         fig_wwr = px.scatter(x=ead, y=pd_cpty)
         fig_wwr.update_layout(template="plotly_dark", height=300, xaxis_title="Esposizione al Default - EAD (M€)", yaxis_title="Probabilità di Default - PD (%)")
         st.plotly_chart(fig_wwr, use_container_width=True)
+
+# ==========================================
+# WORKSPACE 7: NUOVA FUNZIONE (IN SVILUPPO)
+# ==========================================
+elif workspace == _('ws7'):
+    st.markdown(f"<h1>{_('ws7')}</h1>", unsafe_allow_html=True)
+    st.info("⚠️ **Area di Sviluppo:** Questo è il nuovo spazio integrato pronto per ospitare la tua funzione analitica.")
+    st.markdown("""
+    Da qui possiamo aggiungere qualsiasi cosa serva al tuo terminale quantitativo. Ad esempio:
+    *   Un simulatore di portafoglio su derivati.
+    *   Un grafico interattivo sui prezzi del mercato Gas.
+    *   Un calcolatore di indicatori finanziari personalizzati.
+    """)
 
 # Footer
 st.markdown("---")
