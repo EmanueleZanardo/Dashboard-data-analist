@@ -32,6 +32,10 @@ st.markdown("""
     .edu-tooltip { position: relative; display: inline-block; border-bottom: 1px dotted #3B82F6; cursor: help; color: #93C5FD; font-weight: 600;}
     .edu-tooltip .edu-tooltiptext { visibility: hidden; width: 280px; background-color: #1F2937; color: #F9FAFB; text-align: left; border-radius: 6px; padding: 12px; position: absolute; z-index: 999; bottom: 125%; left: 50%; margin-left: -140px; opacity: 0; transition: opacity 0.3s; font-size: 11px; box-shadow: 0px 10px 15px rgba(0,0,0,0.8); border: 1px solid #3B82F6; font-family: 'Inter', sans-serif; font-weight: normal;}
     .edu-tooltip:hover .edu-tooltiptext { visibility: visible; opacity: 1; }
+    
+    /* Stile per i radio button del quiz */
+    div[role="radiogroup"] > label { background-color: #1F2937; padding: 15px; border-radius: 8px; border: 1px solid #374151; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }
+    div[role="radiogroup"] > label:hover { background-color: #374151; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -51,7 +55,7 @@ T = {
         'ws4': '🌍 Climate & Grid Intel',
         'ws5': '📈 Exotics & Structuring',
         'ws6': '🏛️ Enterprise Risk & XVA',
-        'ws7': '✨ Nuova Funzione (In Sviluppo)',
+        'ws7': '🎓 Practice Test (Analyst)',
         'prompt': 'Chiedi all\'AI',
         'market_params': '⚙️ Parametri di Mercato'
     },
@@ -64,7 +68,7 @@ T = {
         'ws4': '🌍 Climate & Grid Intel',
         'ws5': '📈 Exotics & Structuring',
         'ws6': '🏛️ Enterprise Risk & XVA',
-        'ws7': '✨ New Feature (In Development)',
+        'ws7': '🎓 Practice Test (Analyst)',
         'prompt': 'Ask AI Copilot',
         'market_params': '⚙️ Market Parameters'
     },
@@ -77,7 +81,7 @@ T = {
         'ws4': '🌍 Climat & Réseau Intel',
         'ws5': '📈 Exotiques & Structuration',
         'ws6': '🏛️ Risque d\'Entreprise & XVA',
-        'ws7': '✨ Nouvelle Fonction (En Développement)',
+        'ws7': '🎓 Test Pratique (Analyste)',
         'prompt': 'Demander à l\'IA',
         'market_params': '⚙️ Paramètres du Marché'
     }
@@ -607,17 +611,67 @@ elif workspace == _('ws6'):
         st.plotly_chart(fig_wwr, use_container_width=True)
 
 # ==========================================
-# WORKSPACE 7: NUOVA FUNZIONE (IN SVILUPPO)
+# WORKSPACE 7: PRACTICE TEST (ANALYST)
 # ==========================================
 elif workspace == _('ws7'):
-    st.markdown(f"<h1>{_('ws7')}</h1>", unsafe_allow_html=True)
-    st.info("⚠️ **Area di Sviluppo:** Questo è il nuovo spazio integrato pronto per ospitare la tua funzione analitica.")
-    st.markdown("""
-    Da qui possiamo aggiungere qualsiasi cosa serva al tuo terminale quantitativo. Ad esempio:
-    *   Un simulatore di portafoglio su derivati.
-    *   Un grafico interattivo sui prezzi del mercato Gas.
-    *   Un calcolatore di indicatori finanziari personalizzati.
-    """)
+    st.markdown("<h1>🎓 Practice Test - Energy Analyst & Trader (European Markets)</h1>", unsafe_allow_html=True)
+    
+    c_prog1, c_prog2 = st.columns([4, 1])
+    with c_prog1:
+        st.progress(8/15)
+    with c_prog2:
+        st.markdown("<div style='text-align: right; font-weight: bold;'>8/15 &nbsp;&nbsp; <span style='color:#EF4444;'>❌ 0</span> &nbsp;&nbsp; <span style='color:#10B981;'>✔️ 3</span></div>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    st.markdown("<h3 style='line-height: 1.5; color: #E5E7EB; margin-bottom: 25px;'>Al fine di ottimizzare il proprio profilo LinkedIn per attirare l'attenzione dei recruiter di aziende di trading di materie prime come DXT Commodities, quale approccio nella sezione 'Esperienza' dimostra meglio un set di competenze quantificabili e rilevanti?</h3>", unsafe_allow_html=True)
+    
+    if 'quiz_answered' not in st.session_state:
+        st.session_state.quiz_answered = False
+        st.session_state.quiz_choice = None
+
+    def check_answer():
+        st.session_state.quiz_answered = True
+
+    choice = st.radio(
+        "Seleziona un'opzione:",
+        options=[
+            "A. Enfatizzare competenze trasversali generiche, scrivendo: 'Eccellenti capacità di comunicazione e forte propensione al lavoro di squadra in ambienti ad alta pressione'.",
+            "B. Concentrarsi esclusivamente sulle nozioni accademiche apprese, elencando tutti i corsi universitari seguiti inerenti all'energia e all'economia.",
+            "C. Utilizzare il metodo STAR e inserire metriche, ad esempio: 'Sviluppato un modello in Python per l'analisi dello spark spread storico, riducendo i tempi di reportistica del 20%'."
+        ],
+        key="quiz_choice",
+        label_visibility="collapsed",
+        index=None if not st.session_state.quiz_answered else (2 if "C." in st.session_state.quiz_choice else (0 if "A." in st.session_state.quiz_choice else 1))
+    )
+    
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    if not st.session_state.quiz_answered:
+        st.button("Conferma Risposta", on_click=check_answer, type="primary")
+    else:
+        if "C." in st.session_state.quiz_choice:
+            st.markdown("""
+            <div style='background-color:rgba(16, 185, 129, 0.1); border:1px solid #10B981; border-radius:8px; padding:20px; margin-bottom:15px;'>
+                <div style='display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;'>
+                    <span style='color:#10B981; font-weight:bold; font-size:18px;'>✔️ (La tua risposta) Corretta</span>
+                </div>
+                <p style='color:#E5E7EB; line-height:1.6;'>Questo approccio combina competenze tecniche specifiche (Python, spark spread), descrive un'azione concreta (sviluppato un modello) e quantifica il risultato (ridotto i tempi del 20%), che è il metodo più efficace per dimostrare valore.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("Ricomincia", type="secondary"):
+                st.session_state.quiz_answered = False
+                st.rerun()
+        else:
+            st.markdown("""
+            <div style='background-color:rgba(239, 68, 68, 0.1); border:1px solid #EF4444; border-radius:8px; padding:20px; margin-bottom:15px;'>
+                <span style='color:#EF4444; font-weight:bold; font-size:18px;'>❌ Risposta Errata</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if st.button("Riprova", type="secondary"):
+                st.session_state.quiz_answered = False
+                st.rerun()
 
 # Footer
 st.markdown("---")
